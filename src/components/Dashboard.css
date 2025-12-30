@@ -1,0 +1,141 @@
+/* Dashboard Layout */
+.dashboard-container {
+  min-height: 100vh;
+  background-color: #f8f9fa;
+  padding-bottom: 200px;
+  /* Space for large bottom nav */
+}
+
+/* Dashboard Header */
+.dashboard-header {
+  background: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-title {
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0;
+}
+
+/* Dashboard Content */
+.dashboard-content {
+  padding: 0 1.5rem;
+  max-width: 1400px;
+  /* Wider for better layout */
+  margin: 0 auto;
+}
+
+/* Cards */
+.stat-card {
+  background: white;
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  height: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon-wrapper {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  /* Bolder */
+  color: #2c3e50;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.stat-label {
+  color: #7f8c8d;
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-top: 5px;
+}
+
+.premium-stat {
+  background: linear-gradient(135deg, #4b0082 0%, #00008b 100%);
+  color: white;
+}
+
+.premium-stat .stat-value,
+.premium-stat .stat-label,
+.premium-stat p,
+.premium-stat h3 {
+  color: white;
+}
+
+.premium-stat .text-white-50 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Table Styling */
+.custom-table-container {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  padding: 1.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.02);
+}
+
+.custom-table thead th {
+  background-color: #f8f9fa;
+  border: none;
+  color: #7f8c8d;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  padding: 1rem;
+  letter-spacing: 0.5px;
+}
+
+.custom-table tbody td {
+  border-bottom: 1px solid #f1f1f1;
+  padding: 1.2rem 1rem;
+  vertical-align: middle;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.badge-custom {
+  padding: 0.6em 1.2em;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.badge-premium {
+  background-color: #e0d4fc;
+  color: #4b0082;
+}
+
+.badge-standard {
+  background-color: #e3f2fd;
+  color: #0d47a1;
+}

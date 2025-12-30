@@ -1,0 +1,143 @@
+/* BottomNav.css */
+/* Bottom Navigation Bar - Rounded Trapezoid Design */
+.bottom-nav-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding-bottom: 0;
+    z-index: 1000;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.bottom-nav {
+    pointer-events: auto;
+    position: relative;
+    z-index: 2;
+
+    /* Layout */
+    display: flex;
+    gap: 2rem;
+    align-items: flex-end;
+    /* Lower alignment */
+    justify-content: center;
+
+    /* Dimensions */
+    min-width: 550px;
+    height: 90px;
+    padding: 0 4rem 1.2rem 4rem;
+
+    /* Transparent bg because pseudo does the shape */
+    background: transparent;
+}
+
+/* The Shape Layer */
+.bottom-nav::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+
+    /* The Background */
+    background: linear-gradient(to right, #4b0082, #00008b);
+    backdrop-filter: blur(10px);
+
+    /* Slanting shape with curves */
+    transform: perspective(100px) rotateX(10deg) scaleX(1.1);
+    transform-origin: bottom center;
+
+    border-top-left-radius: 70px;
+    border-top-right-radius: 70px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+
+    /* Shadow */
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
+
+    height: 120%;
+    bottom: 0;
+}
+
+/* Nav Items */
+.nav-item-custom {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.5rem;
+
+    /* Fixed circular dimensions */
+    width: 55px;
+    height: 40px;
+    padding: 0 14px;
+    /* Default padding */
+    border-radius: 50px;
+    /* Pill/Circle hybrid for expansion */
+
+    /* transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); */
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Hover State */
+.nav-item-custom:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+    width: auto;
+    /* Expand width */
+    padding-right: 20px;
+}
+
+/* Active State */
+.nav-item-custom.active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    /* border-radius: 50%; */
+    /* Force circle when active (unless hovered) */
+    width: auto;
+    /* Keep active item compact usually, unless we want active label too */
+}
+
+/* Nav Label (Reveal on Hover) */
+.nav-label {
+    max-width: 0;
+    opacity: 0;
+    white-space: nowrap;
+    margin-left: 0;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.nav-item-custom:hover .nav-label {
+    max-width: 150px;
+    margin-left: 10px;
+    opacity: 1;
+}
+
+/* Active Dot Indicator */
+.nav-item-custom::after {
+    content: '';
+    position: absolute;
+    top: 45px;
+    /* Move below the 40px height of the item */
+    left: 50%;
+    transform: translateX(-10%) scale(0);
+    width: 5px;
+    height: 5px;
+    background-color: #00d4ff;
+    border-radius: 50%;
+    box-shadow: 0 0 6px #00d4ff;
+    transition: transform 0.3s ease;
+    z-index: 10;
+}
+
+.nav-item-custom.active::after {
+    transform: translateX(-50%) scale(1);
+}
