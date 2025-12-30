@@ -1,13 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Row, Col, Button, Modal } from 'react-bootstrap';
-import MerchantList from './MerchantList';
-import UserList from './UserList';
-import Subscribers from './Subscribers';
+import React, { useState, useEffect } from 'react';
+import { Button, Badge, Modal } from 'react-bootstrap';
 import BottomNav from './BottomNav';
-import { merchants, users } from '../data/mockData';
 import './Dashboard.css';
+import MerchantProfile from './MerchantProfile';
+import ManageChits from './ManageChits';
 
-const Dashboard = ({ onLogout }) => {
+const MerchantDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [goldRates, setGoldRates] = useState({ buy: 0, sell: 0, loading: true });
     const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -30,7 +28,7 @@ const Dashboard = ({ onLogout }) => {
                     // Buy is slightly higher (Market + Premium)
                     // Sell is slightly lower (Market - Margin)
                     const buyPrice = marketPrice * 1.03; // +3%
-                    const sellPrice = marketPrice * 0.97; // -3%                    
+                    const sellPrice = marketPrice * 0.97; // -3%
 
                     setGoldRates({
                         buy: buyPrice.toFixed(2),
@@ -50,61 +48,55 @@ const Dashboard = ({ onLogout }) => {
         return () => clearInterval(interval);
     }, []);
 
+    // Merchant tabs definition
+    const merchantTabs = [
+        { id: 'overview', icon: 'fa-tachometer-alt', label: 'Overview' },
+        { id: 'plans', icon: 'fa-list-alt', label: 'My Plans' },
+        { id: 'profile', icon: 'fa-user-cog', label: 'Profile' },
+    ];
 
     const renderContent = () => {
         switch (activeTab) {
-            case 'merchants':
-                return <MerchantList />;
-            case 'users':
-                return <UserList />;
-            case 'subscribers':
-                return <Subscribers />;
             case 'overview':
-            default:
                 return (
-                    <Row className="g-4">
-                        <Col md={3}>
-                            <div className="stat-card">
-                                <div className="stat-icon-wrapper bg-info bg-opacity-10">
-                                    <i className="fas fa-store text-info"></i>
+                    <div className="text-center mt-5">
+                        <h2 className="text-secondary">Welcome, {user.name}</h2>
+                        <p className="lead text-muted">Manage your business and chit plans efficiently.</p>
+                        <div className="row g-4 mt-4 justify-content-center">
+                            <div className="col-md-5">
+                                <div className="card border-0 shadow-sm p-4 text-center">
+                                    <h1 className="display-4 text-primary fw-bold">4</h1>
+                                    <p className="text-muted">Active Plans</p>
                                 </div>
-                                <h3 className="stat-value">{merchants.length}</h3>
-                                <div className="stat-label">Total Merchants</div>
                             </div>
-                        </Col>
-                        <Col md={3}>
-                            <div className="stat-card">
-                                <div className="stat-icon-wrapper bg-warning bg-opacity-10">
-                                    <i className="fas fa-user text-warning"></i>
+                            <div className="col-md-5">
+                                <div className="card border-0 shadow-sm p-4 text-center">
+                                    <h1 className="display-4 text-success fw-bold">128</h1>
+                                    <p className="text-muted">Total Enrolled</p>
                                 </div>
-                                <h3 className="stat-value">{users.length}</h3>
-                                <div className="stat-label">Total Users</div>
                             </div>
-                        </Col>
-                        <Col md={6}>
-                            <div className="stat-card premium-stat">
-                                <h3>Welcome Back, Maazu</h3>
-                                <p className="mb-0 text-white-50">You have {merchants.filter(m => m.status === 'Pending').length} pending merchant approvals today.</p>
-                            </div>
-                        </Col>
-                        <Col md={12} className="mt-4">
-                            <Subscribers />
-                        </Col>
-                    </Row>
+                        </div>
+                    </div>
                 );
+            case 'plans':
+                return <ManageChits merchantId={user.id} />;
+            case 'profile':
+                return <MerchantProfile merchantData={user} />;
+            default:
+                return <div>Select a tab</div>;
         }
     };
 
     return (
         <div className="dashboard-container">
-            {/* Header */}
             <div className="dashboard-header">
                 <div className="d-flex align-items-center">
-
-                    <h2 className="dashboard-title me-3">
-                        <i className="fas fa-gem text-primary me-2"></i>
-                        Jewel Pro
+                    <h2 className="dashboard-title mb-0 me-4">
+                        <i className="fas fa-gem text-warning me-2"></i>
+                        Merchant Portal
                     </h2>
+
+                    {/* Gold Rates Ticker in Navbar - Jar App Style */}
                     <div className="d-none d-lg-flex align-items-center rounded-pill ps-2 pe-4 py-1 shadow"
                         style={{
                             background: "linear-gradient(220deg, #4b0082 0%, #00008b 100%)", // Deep dark violet
@@ -140,19 +132,14 @@ const Dashboard = ({ onLogout }) => {
                     </div>
                 </div>
 
-                <Button variant="outline-danger" className="rounded-pill px-4" onClick={() => setShowLogoutModal(true)}>
-                    <i className="fas fa-sign-out-alt me-2"></i>
-                    Logout
-                </Button>
+                <div className="d-flex align-items-center gap-3">
+                    <span className="text-secondary fw-bold d-none d-md-block">{user.name} ({user.plan})</span>
+                    <Button variant="outline-danger" className="rounded-pill px-4" onClick={() => setShowLogoutModal(true)}>
+                        <i className="fas fa-sign-out-alt me-2"></i>
+                        Logout
+                    </Button>
+                </div>
             </div>
-
-            {/* Main Content */}
-            <div className="dashboard-content animate__animated animate__fadeIn">
-                {renderContent()}
-            </div>
-
-            {/* Bottom Navigation */}
-            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
             {/* Logout Confirmation Modal */}
             <Modal show={showLogoutModal} onHide={() => setShowLogoutModal(false)} centered>
@@ -175,8 +162,21 @@ const Dashboard = ({ onLogout }) => {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
+            {/* Mobile ticker if needed, or kept hidden */}
+            <div className="d-lg-none bg-light p-2 text-center border-bottom">
+                <span className="text-secondary small fw-bold me-2">GOLD (24k):</span>
+                <Badge className="me-2 text-white" style={{ background: 'linear-gradient(to right, #4b0082, #00008b)' }}>Buy: ₹{goldRates.buy || '...'}</Badge>
+                <Badge className="text-white" style={{ background: 'linear-gradient(to right, #4b0082, #00008b)' }}>Sell: ₹{goldRates.sell || '...'}</Badge>
+            </div>
+
+            <div className="dashboard-content">
+                {renderContent()}
+            </div>
+
+            <BottomNav activeTab={activeTab} onTabChange={setActiveTab} tabs={merchantTabs} />
         </div>
     );
 };
 
-export default Dashboard;
+export default MerchantDashboard;

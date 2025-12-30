@@ -128,7 +128,7 @@
     top: 45px;
     /* Move below the 40px height of the item */
     left: 50%;
-    transform: translateX(-10%) scale(0);
+    /* transform: translateX(-10%) scale(0); */
     width: 5px;
     height: 5px;
     background-color: #00d4ff;
