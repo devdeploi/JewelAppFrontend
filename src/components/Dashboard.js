@@ -1,64 +1,91 @@
 import React, { useEffect, useState } from 'react';
 import { Row, Col, Button, Modal } from 'react-bootstrap';
+import Link from 'react-router-dom';
 import MerchantList from './MerchantList';
 import UserList from './UserList';
 import Subscribers from './Subscribers';
 import BottomNav from './BottomNav';
-import { merchants, users } from '../data/mockData';
 import './Dashboard.css';
+import axios from 'axios';
+import { APIURL } from '../utils/Function';
 
 const Dashboard = ({ onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [goldRates, setGoldRates] = useState({ buy: 0, sell: 0, loading: true });
     const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+    const [stats, setStats] = useState({
+        merchantsCount: 0,
+        usersCount: 0,
+        pendingMerchants: 0
+    });
+
+    const [userName, setUserName] = useState('');
+
     useEffect(() => {
+        const user = JSON.parse(localStorage.getItem('user'));
+        if (user) {
+            setUserName(user.name);
+        }
+
+        // ... existing gold price fetch ...
         const fetchGoldPrice = async () => {
+            // ... (keep this logic)
             try {
                 const response = await fetch(
                     "https://data-asg.goldprice.org/dbXRates/INR"
                 );
-
-                if (!response.ok) {
-                    throw new Error("Gold API failed");
-                }
-
+                if (!response.ok) throw new Error("Gold API failed");
                 const data = await response.json();
-
-                // XAU price per ounce in INR
                 const pricePerOunce = data?.items?.[0]?.xauPrice;
-                if (!pricePerOunce) {
-                    throw new Error("Invalid gold data");
-                }
-
-                // Convert ounce → gram (24K)
+                if (!pricePerOunce) throw new Error("Invalid gold data");
                 const pricePerGram24K = pricePerOunce / 31.1035;
-
-                // Chennai market adjustments (optional but realistic)
-                const chennaiAdjusted = pricePerGram24K * 1.01; // +1% regional premium
-
-                // Buy / Sell spread
-                const buyPrice = chennaiAdjusted * 1.03;  // GST + margin
-                const sellPrice = chennaiAdjusted * 0.97; // dealer margin
-
+                const chennaiAdjusted = pricePerGram24K * 1.01;
+                const buyPrice = chennaiAdjusted * 1.03;
+                const sellPrice = chennaiAdjusted * 0.97;
                 setGoldRates({
                     buy: buyPrice.toFixed(2),
                     sell: sellPrice.toFixed(2),
                     loading: false
                 });
-
             } catch (error) {
                 console.error("Gold price fetch failed:", error);
                 setGoldRates(prev => ({ ...prev, loading: false }));
             }
         };
 
-        fetchGoldPrice();
+        const fetchStats = async () => {
+            try {
+                // Fetch stats only if overview is active to save bandwidth
+                if (activeTab !== 'overview') return;
 
-        // Refresh every 60 seconds
-        const interval = setInterval(fetchGoldPrice, 60000);
+                const user = JSON.parse(localStorage.getItem('user'));
+                const token = user?.token;
+                const config = { headers: { Authorization: `Bearer ${token}` } };
+                const response = await axios.get(`${APIURL}/merchants?limit=10`, config); // Minimize data
+                const response2 = await axios.get(`${APIURL}/users?limit=10`, config);
+                const pendingResponse = await axios.get(`${APIURL}/merchants?status=Pending&limit=10`, config);
+
+                setStats({
+                    merchantsCount: response.data.pagination.totalRecords || 0,
+                    usersCount: response2.data.total || 0,
+                    pendingMerchants: pendingResponse.data.pagination.totalRecords || 0
+                });
+
+            } catch (error) {
+                console.error("Stats fetch failed", error);
+            }
+        };
+
+        fetchGoldPrice();
+        fetchStats();
+
+        const interval = setInterval(() => {
+            fetchGoldPrice();
+            fetchStats();
+        }, 60000);
         return () => clearInterval(interval);
-    }, []);
+    }, [activeTab]);
 
 
 
@@ -76,26 +103,26 @@ const Dashboard = ({ onLogout }) => {
                     <Row className="g-4">
                         <Col md={3}>
                             <div className="stat-card">
-                                <div className="stat-icon-wrapper" style={{ background: "#FFD36A",color:"#915200" }}>
+                                <div className="stat-icon-wrapper" style={{ background: "#FFD36A", color: "#915200" }}>
                                     <i className="fas fa-store"></i>
                                 </div>
-                                <h3 className="stat-value">{merchants.length}</h3>
+                                <h3 className="stat-value">{stats.merchantsCount}</h3>
                                 <div className="stat-label">Total Merchants</div>
                             </div>
                         </Col>
                         <Col md={3}>
                             <div className="stat-card">
-                                <div className="stat-icon-wrapper" style={{ background: "#FFD36A",color:"#915200" }}>
+                                <div className="stat-icon-wrapper" style={{ background: "#FFD36A", color: "#915200" }}>
                                     <i className="fas fa-user"></i>
                                 </div>
-                                <h3 className="stat-value">{users.length}</h3>
+                                <h3 className="stat-value">{stats.usersCount}</h3>
                                 <div className="stat-label">Total Users</div>
                             </div>
                         </Col>
                         <Col md={6}>
                             <div className="stat-card premium-stat">
-                                <h3>Welcome Back, Maazu</h3>
-                                <p className="mb-0 text-white-50">You have {merchants.filter(m => m.status === 'Pending').length} pending merchant approvals today.</p>
+                                <h3>Welcome Back, {userName || 'Admin'}</h3>
+                                <p className="mb-0 text-white-50">You have {stats.pendingMerchants} pending merchant approvals today.</p>
                             </div>
                         </Col>
                         <Col md={12} className="mt-4">

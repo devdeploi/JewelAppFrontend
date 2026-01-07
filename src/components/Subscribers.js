@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react';
 import { Row, Col, Card, Table } from 'react-bootstrap';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
-import { merchants } from '../data/mockData';
+// import { merchants } from '../data/mockData';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -13,6 +14,8 @@ import {
     Legend,
     ArcElement
 } from 'chart.js';
+import axios from 'axios';
+import { APIURL } from '../utils/Function';
 
 ChartJS.register(
     CategoryScale,
@@ -27,12 +30,54 @@ ChartJS.register(
 );
 
 const Subscribers = () => {
-    const premiumCount = merchants.filter(m => m.plan === 'Premium').length;
-    const standardCount = merchants.filter(m => m.plan === 'Standard').length;
-    const total = merchants.length;
+    const [merchantsList, setMerchantsList] = useState([]);
+    const [stats, setStats] = useState({
+        premiumCount: 0,
+        standardCount: 0,
+        total: 0,
+        revenue: 0,
+        active: 0,
+        pending: 0,
+        inactive: 0
+    });
 
-    // Estimates based on assumed pricing
-    const revenue = (premiumCount * 5000) + (standardCount * 1500);
+    useEffect(() => {
+        const fetchMerchants = async () => {
+            try {
+                const user = JSON.parse(localStorage.getItem('user'));
+                const config = {
+                    headers: {
+                        Authorization: `Bearer ${user?.token}`
+                    }
+                };
+                const res = await axios.get(`${APIURL}/merchants`, config);
+                const data = res.data.merchants;
+                setMerchantsList(data);
+
+                const premiumCount = data.filter(m => m.plan === 'Premium').length;
+                const standardCount = data.filter(m => m.plan === 'Standard').length; // or 'Basic' or default
+                // If plan is not 'Premium' or 'Standard', assume standard/free?
+                // Let's assume just counted by Plan field.
+
+                const total = data.length;
+                const revenue = (premiumCount * 5000) + (standardCount * 1500); // Estimations
+
+                setStats({
+                    premiumCount,
+                    standardCount,
+                    total,
+                    revenue,
+                    active: data.filter(m => m.status === 'Approved').length,
+                    pending: data.filter(m => m.status === 'Pending').length,
+                    inactive: data.filter(m => m.status === 'Rejected').length
+                });
+
+            } catch (error) {
+                console.error("Error fetching merchants for analytics", error);
+            }
+        };
+        fetchMerchants();
+    }, []);
 
     // Custom Brand Colors
     const brandViolet = '#ebdc87';  // Violet
@@ -40,17 +85,29 @@ const Subscribers = () => {
 
     // Chart Data Configuration
 
-    // 1. Revenue Line Chart Data
-    const revenueLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    // 1. Revenue Line Chart Data - Dynamic Calculation
+    // Initialize array for 12 months [Jan, Feb, ... Dec]
+    const monthlyRevenue = new Array(12).fill(0);
+    const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    merchantsList.forEach(m => {
+        const date = new Date(m.createdAt);
+        const monthIndex = date.getMonth(); // 0 = Jan, 11 = Dec
+        // Only consider current year or simplified all-time monthly aggregation
+        // For simplicity: Aggregating all time revenue into months
+        const amount = m.plan === 'Premium' ? 5000 : 1500;
+        monthlyRevenue[monthIndex] += amount;
+    });
+
     const revenueData = {
-        labels: revenueLabels,
+        labels: monthLabels,
         datasets: [
             {
                 label: 'Revenue Growth',
-                data: [1200, 1900, 3000, 1500, 2500, revenue], // Simulated growth to current
+                data: monthlyRevenue,
                 borderColor: brandViolet,
                 backgroundColor: 'rgba(138, 43, 226, 0.1)',
-                tension: 0.4, // Smooth curve
+                tension: 0.4,
                 fill: true,
                 pointBackgroundColor: brandDarkBlue,
                 pointBorderColor: '#fff',
@@ -77,7 +134,7 @@ const Subscribers = () => {
         labels: ['Premium', 'Standard'],
         datasets: [
             {
-                data: [premiumCount, standardCount],
+                data: [stats.premiumCount, stats.standardCount],
                 backgroundColor: [brandViolet, brandDarkBlue],
                 borderColor: ['#fff', '#fff'],
                 borderWidth: 2,
@@ -95,16 +152,16 @@ const Subscribers = () => {
 
     // 3. Activity Bar Chart Data
     const activityData = {
-        labels: ['Active', 'Pending', 'Inactive'],
+        labels: ['Approved', 'Pending', 'Rejected'],
         datasets: [
             {
                 label: 'Merchants',
                 data: [
-                    merchants.filter(m => m.status === 'Active').length,
-                    merchants.filter(m => m.status === 'Pending').length,
-                    merchants.filter(m => m.status === 'Inactive' || m.status === 'Suspended').length
+                    stats.active,
+                    stats.pending,
+                    stats.inactive
                 ],
-                backgroundColor: [brandViolet, brandDarkBlue, '#e9ecef'],
+                backgroundColor: [brandDarkBlue, brandViolet, '#e9ecef'], // Approved, Pending, Rejected
                 borderRadius: 5,
             }
         ]
@@ -139,7 +196,7 @@ const Subscribers = () => {
                                     <p className="text-muted small mb-0">First half yearly growth</p>
                                 </div>
                                 <h2 className="fw-bold mb-0" style={{ color: brandDarkBlue }}>
-                                    ₹{revenue.toLocaleString('en-IN')}
+                                    ₹{stats.revenue.toLocaleString('en-IN')}
                                 </h2>
                             </div>
                             <div style={{ height: '250px' }}>
@@ -156,7 +213,7 @@ const Subscribers = () => {
                             <div className="mx-auto position-relative" style={{ height: '180px', width: '180px' }}>
                                 <Doughnut data={distributionData} options={doughnutOptions} />
                                 <div className="position-absolute start-50 translate-middle text-center" style={{ top: '35%' }}>
-                                    <h4 className="fw-bold mb-0" style={{ color: brandDarkBlue }}>{total}</h4>
+                                    <h4 className="fw-bold mb-0" style={{ color: brandDarkBlue }}>{stats.total}</h4>
                                     <small className="text-muted" style={{ fontSize: '10px' }}>TOTAL</small>
                                 </div>
                             </div>
@@ -195,8 +252,8 @@ const Subscribers = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {merchants.slice(0, 5).map(m => (
-                                    <tr key={m.id}>
+                                {merchantsList.slice(0, 5).map(m => (
+                                    <tr key={m._id}>
                                         <td className="ps-4 fw-bold" style={{ color: brandDarkBlue }}>{m.name}</td>
                                         <td>
                                             <div
@@ -214,11 +271,16 @@ const Subscribers = () => {
                                         <td className="text-muted small">Monthly Auto-Debit</td>
                                         <td>
                                             <div className="d-flex align-items-center">
-                                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: m.status === 'Active' ? '#198754' : '#6c757d' }} className="me-2"></div>
-                                                <span className="small text-muted">{m.status}</span>
+                                                <div style={{
+                                                    width: '6px',
+                                                    height: '6px',
+                                                    borderRadius: '50%',
+                                                    backgroundColor: m.status === 'Approved' ? '#915200' : m.status === 'Rejected' ? '#dc3545' : '#ebdc87'
+                                                }} className="me-2"></div>
+                                                <span className="small text-muted">{m.status || 'Pending'}</span>
                                             </div>
                                         </td>
-                                        <td className="text-end pe-4 text-muted small">{m.joined || 'N/A'}</td>
+                                        <td className="text-end pe-4 text-muted small">{new Date(m.createdAt).toLocaleDateString()}</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -4,11 +4,38 @@ import BottomNav from './BottomNav';
 import './Dashboard.css';
 import MerchantProfile from './MerchantProfile';
 import ManageChits from './ManageChits';
+import axios from 'axios';
+import { APIURL } from '../utils/Function';
 
 const MerchantDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [goldRates, setGoldRates] = useState({ buy: 0, sell: 0, loading: true });
     const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [stats, setStats] = useState({ activePlans: 0, totalEnrolled: 0 });
+
+    // Fetch Chit Plans to calculate stats
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                // Fetch stats only when on overview tab to ensure data is fresh
+                if (activeTab !== 'overview') return;
+
+                // If user is merchant, they have an _id.
+                // Assuming user object has _id
+                if (user._id || user.id) {
+                    const id = user._id || user.id;
+                    const { data } = await axios.get(`${APIURL}/chit-plans/merchant/${id}?limit=100`); // Fetch enough to calculate stats
+                    const plans = data.plans || [];
+                    const activePlans = plans.length; // or data.total if we want total count but we need plans for subscribers
+                    const totalEnrolled = plans.reduce((acc, plan) => acc + (plan.subscribers ? plan.subscribers.length : 0), 0);
+                    setStats({ activePlans, totalEnrolled });
+                }
+            } catch (error) {
+                console.error("Error fetching merchant stats", error);
+            }
+        };
+        fetchStats();
+    }, [user, activeTab]);
 
     // Fetch Gold Price
     useEffect(() => {
@@ -70,21 +97,121 @@ const MerchantDashboard = ({ user, onLogout }) => {
         switch (activeTab) {
             case 'overview':
                 return (
-                    <div className="text-center mt-5">
-                        <h2 className="text-secondary">Welcome, {user.name}</h2>
-                        <p className="lead text-muted">Manage your business and chit plans efficiently.</p>
-                        <div className="row g-4 mt-4 justify-content-center">
-                            <div className="col-md-5">
-                                <div className="card border-0 shadow-sm p-4 text-center">
-                                    <h1 className="display-4 text-primary fw-bold">4</h1>
-                                    <p className="text-muted">Active Plans</p>
+
+                    <div className="container-fluid p-0">
+                        {/* Welcome Banner */}
+                        <div
+                            className="rounded-4 p-5 mb-5 position-relative overflow-hidden shadow-sm"
+                            style={{
+                                background: 'linear-gradient(135deg, #f3e9bd 20%, #ebdc87 100%)',
+                                minHeight: '200px',
+                                color: '#915200'
+                            }}
+                        >
+                            <div className="position-relative" style={{ zIndex: 2 }}>
+                                <h1 className="display-5 fw-bold mb-2">Welcome back, {user.name}!</h1>
+                                <p className="lead opacity-75 mb-0 fw-semibold" style={{ maxWidth: '600px' }}>
+                                    Here's what's happening with your business today. Track your growth and manage your plans seamlessly.
+                                </p>
+                            </div>
+
+                            {/* Decorative Background Elements */}
+                            <i className="fas fa-crown position-absolute" style={{
+                                right: '-20px',
+                                top: '-20px',
+                                fontSize: '15rem',
+                                color: '#ffffff',
+                                opacity: 0.05
+                            }}></i>
+                            <div className="position-absolute" style={{
+                                width: '300px',
+                                height: '300px',
+                                background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
+                                top: '-100px',
+                                right: '100px',
+                                borderRadius: '50%'
+                            }}></div>
+                        </div>
+
+                        {/* Stats Grid */}
+                        <div className="row g-4 mb-5">
+                            {/* Stats Card 1: Active Plans */}
+                            <div className="col-md-4">
+                                <div className="card border-0 shadow-sm h-100 position-relative overflow-hidden hover-card">
+                                    <div className="card-body p-4 d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <p className="text-muted fw-bold text-uppercase small mb-1" style={{ letterSpacing: '1px' }}>Active Plans</p>
+                                            <h2 className="display-5 fw-bold mb-0" style={{ color: '#915200' }}>{stats.activePlans}</h2>
+                                        </div>
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center"
+                                            style={{ width: '60px', height: '60px', background: 'rgba(145, 82, 0, 0.1)' }}>
+                                            <i className="fas fa-layer-group fa-2x" style={{ color: '#915200' }}></i>
+                                        </div>
+                                    </div>
+                                    <div className="card-footer bg-transparent border-0 pt-0 pb-3 ps-4">
+                                        <small className="text-secondary"><i className="fas fa-arrow-up text-success me-1"></i> Running Smoothly</small>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="col-md-5">
-                                <div className="card border-0 shadow-sm p-4 text-center">
-                                    <h1 className="display-4 text-success fw-bold">128</h1>
-                                    <p className="text-muted">Total Enrolled</p>
+
+                            {/* Stats Card 2: Total Subscribers */}
+                            <div className="col-md-4">
+                                <div className="card border-0 shadow-sm h-100 position-relative overflow-hidden hover-card">
+                                    <div className="card-body p-4 d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <p className="text-muted fw-bold text-uppercase small mb-1" style={{ letterSpacing: '1px' }}>Total Subscribers</p>
+                                            <h2 className="display-5 fw-bold mb-0" style={{ color: '#915200' }}>{stats.totalEnrolled}</h2>
+                                        </div>
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center"
+                                            style={{ width: '60px', height: '60px', background: 'rgba(145, 82, 0, 0.1)' }}>
+                                            <i className="fas fa-users fa-2x" style={{ color: '#915200' }}></i>
+                                        </div>
+                                    </div>
+                                    <div className="card-footer bg-transparent border-0 pt-0 pb-3 ps-4">
+                                        <small className="text-secondary"><i className="fas fa-user-plus text-success me-1"></i> Enrolled Customers</small>
+                                    </div>
                                 </div>
+                            </div>
+
+                            {/* Stats Card 3: Total Revenue (Mock/Estimate) */}
+                            <div className="col-md-4">
+                                <div className="card border-0 shadow-sm h-100 position-relative overflow-hidden hover-card">
+                                    <div className="card-body p-4 d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <p className="text-muted fw-bold text-uppercase small mb-1" style={{ letterSpacing: '1px' }}>Est. Revenue</p>
+                                            <h2 className="display-5 fw-bold mb-0" style={{ color: '#915200' }}>₹--</h2>
+                                        </div>
+                                        <div className="rounded-circle d-flex align-items-center justify-content-center"
+                                            style={{ width: '60px', height: '60px', background: 'rgba(145, 82, 0, 0.1)' }}>
+                                            <i className="fas fa-rupee-sign fa-2x" style={{ color: '#915200' }}></i>
+                                        </div>
+                                    </div>
+                                    <div className="card-footer bg-transparent border-0 pt-0 pb-3 ps-4">
+                                        <small className="text-secondary">Analytics coming soon</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Recent Activity / Quick Actions (Optional Placeholder) */}
+                        <div className="card border-0 shadow-sm rounded-4 p-4">
+                            <h5 className="fw-bold mb-3" style={{ color: '#915200' }}>Quick Actions</h5>
+                            <div className="d-flex gap-3">
+                                <Button
+                                    className="px-4 py-2 rounded-pill fw-bold"
+                                    style={{ background: 'linear-gradient(90deg, #ebdc87 0%, #e2d183 100%)', borderColor: '#915200', color: '#915200' }}
+                                    onClick={() => setActiveTab('plans')}
+                                >
+                                    <i className="fas fa-plus-circle me-2"></i>Create New Plan
+                                </Button>
+                                <Button
+                                    className="px-4 py-2 rounded-pill fw-bold"
+                                    variant="outline-dark"
+                                    style={{ color: '#915200', borderColor: '#915200' }}
+                                    onClick={() => setActiveTab('profile')}
+                                >
+                                    <i className="fas fa-user-edit me-2"></i>Edit Profile
+                                </Button>
                             </div>
                         </div>
                     </div>

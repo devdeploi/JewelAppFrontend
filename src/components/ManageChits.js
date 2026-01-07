@@ -1,56 +1,301 @@
-import React, { useState } from 'react';
-import { Card, Table, Button, Modal, Form, Row, Col } from 'react-bootstrap';
-import { chits } from '../data/mockData';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Table, Button, Modal, Form, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import axios from 'axios';
+import { APIURL } from '../utils/Function';
 
-const ManageChits = ({ merchantId }) => {
-    // Filter chits for this merchant (using mock logic)
-    // For demo, we might show a subset or all if ID matches. 
-    // In mockData chits have merchantId.
+import { useRazorpay } from "react-razorpay";
 
-    // Defaulting to merchantId 1 for demo purposes if not passed correctly or new user
-    const [myChits, setMyChits] = useState(chits.filter(c => c.merchantId === (merchantId || 1)) || []);
+const ManageChits = () => {
+    const { Razorpay } = useRazorpay();
+    const [myChits, setMyChits] = useState([]);
     const [showModal, setShowModal] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [currentChit, setCurrentChit] = useState(null); // null = new, object = edit
+    const [merchantData, setMerchantData] = useState(null); // Validated fresh merchant data
+    const loggedinuser = JSON.parse(localStorage.getItem('user'));
+    const merchantId = loggedinuser._id;
 
-    const handleSaveChit = (e) => {
+    const getAuthConfig = useCallback(() => {
+        const user = JSON.parse(localStorage.getItem('user'));
+        return {
+            headers: {
+                Authorization: `Bearer ${user?.token}`,
+                'Content-Type': 'application/json'
+            }
+        };
+    }, []);
+
+    const fetchMerchantStatus = useCallback(async () => {
+        try {
+            if (merchantId) {
+                const config = getAuthConfig();
+                const { data } = await axios.get(`${APIURL}/merchants/${merchantId}`, config);
+                setMerchantData(data);
+            }
+        } catch (error) {
+            console.error("Error fetching merchant status", error);
+        }
+    }, [merchantId, getAuthConfig]);
+
+    const fetchChits = useCallback(async () => {
+        try {
+            if (merchantId) {
+                const data = await axios.get(`${APIURL}/chit-plans/merchant/${merchantId}?limit=100`);
+                setMyChits(data.data.plans || []);
+            }
+        } catch (error) {
+            console.error("Error fetching chits", error);
+        }
+    }, [merchantId]);
+
+    useEffect(() => {
+        fetchChits();
+        fetchMerchantStatus();
+    }, [fetchChits, fetchMerchantStatus]);
+
+    const handleSaveChit = async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
-        const newChit = {
-            id: currentChit ? currentChit.id : Date.now(),
-            merchantId: merchantId || 1,
-            name: formData.get('name'),
-            type: formData.get('type'),
-            amount: formData.get('amount'),
-            duration: formData.get('duration'),
+        const planData = {
+            planName: formData.get('name'), // 'name' in form -> 'planName' in ID
+            // RE-READ: user enters "Total Amount" in form field `amount`.
+            monthlyAmount: parseFloat((parseFloat(formData.get('amount')) / parseInt(formData.get('duration'))).toFixed(2)),
+            durationMonths: parseInt(formData.get('duration')),
             description: formData.get('description'),
+            merchant: merchantId, // Ensure merchant ID is sent for new plans
+            totalAmount: parseFloat(formData.get('amount')) // Add totalAmount to planData
         };
 
-        if (currentChit) {
-            setMyChits(myChits.map(c => c.id === currentChit.id ? newChit : c));
-        } else {
-            setMyChits([...myChits, newChit]);
+        // Basic Validation
+        if (!planData.planName || !planData.totalAmount || !planData.durationMonths) {
+            alert("Please fill required fields");
+            return;
         }
-        setShowModal(false);
+
+        try {
+            const config = getAuthConfig();
+            if (currentChit) {
+                // Update
+                const { data } = await axios.put(`${APIURL}/chit-plans/${currentChit._id}`, planData, config);
+                setMyChits(myChits.map(c => c._id === currentChit._id ? data : c));
+            } else {
+                // Create
+                const { data } = await axios.post(`${APIURL}/chit-plans`, planData, config);
+                setMyChits([...myChits, data]);
+            }
+            setShowModal(false);
+        } catch (error) {
+            console.error("Error saving chit plan", error);
+            alert("Failed to save plan. Please try again.");
+        }
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this plan?")) {
-            setMyChits(myChits.filter(c => c.id !== id));
+            try {
+                const config = getAuthConfig();
+                await axios.delete(`${APIURL}/chit-plans/${id}`, config);
+                setMyChits(myChits.filter(c => c._id !== id));
+            } catch (error) {
+                console.error("Error deleting chit plan", error);
+                alert("Failed to delete plan.");
+            }
         }
-    }
+    };
+
+    // State for form calculation
+    const [amount, setAmount] = useState('');
+    const [duration, setDuration] = useState(11);
 
     const openModal = (chit = null) => {
         setCurrentChit(chit);
+        // Initialize form state
+        setAmount(chit ? chit.totalAmount : '');
+        setDuration(chit ? chit.durationMonths : 11);
         setShowModal(true);
+    };
+
+    // Plan Limits & KYC Logic
+    const userPlan = merchantData?.plan || loggedinuser?.plan || 'Standard';
+    const isPremium = userPlan === 'Premium';
+    const planLimit = isPremium ? 6 : 3;
+    const currentCount = myChits.length;
+
+    // Check KYC
+    // Check KYC
+    // Strict check: Status must be verified AND critical fields must exist
+    const isKycVerified =
+        merchantData?.bankDetails?.verificationStatus === 'verified' &&
+        merchantData?.bankDetails?.verifiedName &&
+        merchantData?.panDetails?.status === 'verified' &&
+        merchantData?.panDetails?.verifiedName;
+
+    const canCreate = isKycVerified && (currentCount < planLimit); // Must be verified AND within limit
+
+    // Helper calculate
+    const calculatedMonthly = amount && duration ? (amount / duration).toFixed(2) : 0;
+
+    const handleUpgradeClick = () => {
+        setShowUpgradeModal(true);
+    };
+
+    const processUpgradePayment = async () => {
+        setShowUpgradeModal(false); // Close modal before starting payment logic
+        try {
+            // 1. Create Order
+            const { data: order } = await axios.post(`${APIURL}/payments/create-subscription-order`, {
+                amount: 5000
+            });
+
+            // 2. Initialize Razorpay
+            const options = {
+                key: "rzp_test_S0aFMLxRqwkL8z", // Replace with your actual Key ID
+                amount: order.amount,
+                currency: order.currency,
+                name: "Aurum Jewellery",
+                description: "Upgrade to Premium Plan",
+                order_id: order.id,
+                handler: async function (response) {
+                    try {
+                        const verifyRes = await axios.post(`${APIURL}/payments/verify-subscription-payment`, {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        });
+
+                        if (verifyRes.data.status === 'success') {
+                            // Update Plan on Backend
+                            const user = JSON.parse(localStorage.getItem('user'));
+                            const config = { headers: { Authorization: `Bearer ${user?.token}` } };
+
+                            // We need to fetch current merchant data first to preserve other fields
+                            const { data: currentMerchant } = await axios.get(`${APIURL}/merchants/${merchantId}`, config);
+
+                            const updatePayload = {
+                                ...currentMerchant,
+                                plan: 'Premium',
+                                paymentId: response.razorpay_payment_id
+                            };
+
+                            await axios.put(`${APIURL}/merchants/${merchantId}`, updatePayload, config);
+
+                            // Update Local Storage
+                            if (user) {
+                                user.plan = 'Premium';
+                                localStorage.setItem('user', JSON.stringify(user));
+                            }
+
+                            alert("Upgrade Successful! You can now create unlimited plans.");
+                            window.location.reload(); // Reload to reflect changes
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert("Payment verification failed");
+                    }
+                },
+                prefill: {
+                    name: loggedinuser.name,
+                    email: loggedinuser.email,
+                    contact: loggedinuser.phone
+                },
+                theme: {
+                    color: "#915200"
+                }
+            };
+
+            const rzp1 = new Razorpay(options);
+            rzp1.on('payment.failed', function (response) {
+                alert(response.error.description);
+            });
+            rzp1.open();
+
+        } catch (error) {
+            console.error(error);
+            alert("Upgrade process failed");
+        }
     };
 
     return (
         <div>
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h4 className="text-secondary mb-0"><i className="fas fa-coins me-2"></i>Manage Chit Plans</h4>
-                <Button style={{ background: 'linear-gradient(90deg, #ebdc87 0%, #e2d183 100%)', borderColor: '#915200', color: '#915200' }} className="fw-bold rounded-pill" onClick={() => openModal()}>
-                    <i className="fas fa-plus me-2"></i>Create New Plan
-                </Button>
+                <div>
+                    <h4 className="text-secondary mb-1"><i className="fas fa-coins me-2"></i>Manage Chit Plans</h4>
+                    <div className="d-flex align-items-center gap-2">
+                        <div
+                            className="text-uppercase badge fw-semibold px-3 py-2"
+                            style={{
+                                background: 'linear-gradient(135deg, #ebdc87 0%, #e2d183 100%)',
+                                color: '#915200',
+                                // borderRadius: '999px',
+                                letterSpacing: '0.5px',
+                                boxShadow: '0 4px 10px rgba(145, 82, 0, 0.25)',
+                                border: '1px solid rgba(145, 82, 0, 0.3)',
+                            }}
+                        >
+                            {userPlan} Plan
+                        </div>
+
+
+                        <small className="text-muted">
+                            ({currentCount} / {planLimit} Chits)
+                        </small>
+
+
+                    </div>
+                </div>
+
+                {!canCreate ? (
+                    <div className="d-flex gap-2">
+                        {!isPremium && isKycVerified && (
+                            <Button
+                                variant="warning"
+                                className="fw-bold rounded-pill text-white"
+                                style={{ background: 'linear-gradient(90deg, #ffc107 0%, #ffca2c 100%)', border: 'none' }}
+                                onClick={handleUpgradeClick}
+                            >
+                                <i className="fas fa-crown me-2"></i>Upgrade to Premium
+                            </Button>
+                        )}
+                        <OverlayTrigger
+                            placement="left"
+                            overlay={<Tooltip>
+                                {!isKycVerified
+                                    ? "KYC Pending! Please verify Bank and PAN details in Profile to create plans."
+                                    : (isPremium ? "Limit Reached! Maximum 6 plans allowed." : "Limit Reached! Upgrade to Premium to add more plans.")}
+                            </Tooltip>}
+                        >
+                            <span className="d-inline-block">
+                                <Button
+                                    style={{ background: '#e9ecef', borderColor: '#dee2e6', color: '#6c757d', cursor: 'not-allowed' }}
+                                    className="fw-bold rounded-pill"
+                                    disabled
+                                >
+                                    <i className="fas fa-lock me-2"></i>Create New Plan
+                                </Button>
+                            </span>
+                        </OverlayTrigger>
+                    </div>
+                ) : (
+                    <div className="d-flex gap-2">
+                        {!isPremium && (
+                            <Button
+                                variant="outline-warning"
+                                className="fw-bold rounded-pill"
+                                style={{ color: '#ffc107', borderColor: '#ffc107' }}
+                                onClick={handleUpgradeClick}
+                            >
+                                <i className="fas fa-crown me-2"></i>Go Premium
+                            </Button>
+                        )}
+                        <Button
+                            style={{ background: 'linear-gradient(90deg, #ebdc87 0%, #e2d183 100%)', borderColor: '#915200', color: '#915200' }}
+                            className="fw-bold rounded-pill"
+                            onClick={() => openModal()}
+                        >
+                            <i className="fas fa-plus me-2"></i>Create New Plan
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <Card className="border-0 shadow-sm rounded-4 overflow-hidden">
@@ -64,8 +309,8 @@ const ManageChits = ({ merchantId }) => {
                         <thead className="bg-light">
                             <tr>
                                 <th>Plan Name</th>
-                                <th>Type</th>
-                                <th>Amount</th>
+                                {/* <th>Type</th> Type is not in DB model yet */}
+                                <th>Monthly / Total</th>
                                 <th>Duration</th>
                                 <th>Description</th>
                                 <th>Actions</th>
@@ -73,17 +318,22 @@ const ManageChits = ({ merchantId }) => {
                         </thead>
                         <tbody>
                             {myChits.map(chit => (
-                                <tr key={chit.id}>
-                                    <td className="fw-bold">{chit.name}</td>
-                                    <td><div className="badge" style={{ background: '#915200', color: '#fff' }}>{chit.type}</div></td>
-                                    <td>₹{chit.amount}</td>
-                                    <td>{chit.duration} Months</td>
+                                <tr key={chit._id}>
+                                    <td className="fw-bold">{chit.planName}</td>
+                                    {/* <td><div className="badge" style={{ background: '#915200', color: '#fff' }}>Gold</div></td> */}
+                                    <td>
+                                        <div className="d-flex flex-column">
+                                            <span>₹{chit.monthlyAmount}/mo</span>
+                                            <small className="text-muted">Total: ₹{chit.totalAmount}</small>
+                                        </div>
+                                    </td>
+                                    <td>{chit.durationMonths} Months</td>
                                     <td className="text-muted small text-truncate" style={{ maxWidth: '200px' }}>{chit.description}</td>
                                     <td>
                                         <Button variant="link" className="p-0 me-3" style={{ color: '#915200' }} onClick={() => openModal(chit)}>
                                             <i className="fas fa-edit"></i>
                                         </Button>
-                                        <Button variant="link" className="text-danger p-0" onClick={() => handleDelete(chit.id)}>
+                                        <Button variant="link" className="text-danger p-0" onClick={() => handleDelete(chit._id)}>
                                             <i className="fas fa-trash"></i>
                                         </Button>
                                     </td>
@@ -103,24 +353,26 @@ const ManageChits = ({ merchantId }) => {
                     <Form onSubmit={handleSaveChit}>
                         <Form.Group className="mb-3">
                             <Form.Label style={{ color: '#915200' }}>Plan Name</Form.Label>
-                            <Form.Control name="name" defaultValue={currentChit?.name} required placeholder="e.g. Gold Saver" />
+                            <Form.Control name="name" defaultValue={currentChit?.planName} required placeholder="e.g. Gold Saver" />
                         </Form.Group>
                         <Row className="g-3 mb-3">
-                            <Col md={6}>
-                                <Form.Group>
-                                    <Form.Label style={{ color: '#915200' }}>Type</Form.Label>
-                                    <Form.Select name="type" defaultValue={currentChit?.type || 'Gold'}>
-                                        <option value="Gold">Gold</option>
-                                        <option value="Silver">Silver</option>
-                                        <option value="Diamond">Diamond</option>
-                                        <option value="Platinum">Platinum</option>
-                                    </Form.Select>
-                                </Form.Group>
-                            </Col>
-                            <Col md={6}>
+                            {/* Removed Type select as it's not in backend */}
+                            <Col md={12}>
                                 <Form.Group>
                                     <Form.Label style={{ color: '#915200' }}>Total Amount (₹)</Form.Label>
-                                    <Form.Control name="amount" type="number" defaultValue={currentChit?.amount} required placeholder="5000" />
+                                    <Form.Control
+                                        name="amount"
+                                        type="number"
+                                        value={amount}
+                                        onChange={(e) => setAmount(e.target.value)}
+                                        required
+                                        placeholder="5000"
+                                    />
+                                    {/* <Form.Text className="text-muted">Monthly installment will be calculated.</Form.Text> */}
+                                    <div className="mt-2 p-2 bg-light rounded text-center">
+                                        <small className="text-muted d-block">Monthly Installment (Approx)</small>
+                                        <strong style={{ color: '#915200', fontSize: '1.2rem' }}>₹{calculatedMonthly}</strong>
+                                    </div>
                                 </Form.Group>
                             </Col>
                         </Row>
@@ -129,10 +381,10 @@ const ManageChits = ({ merchantId }) => {
                             <Form.Range
                                 name="duration"
                                 min="1" max="60"
-                                defaultValue={currentChit?.duration || 11}
-                                onChange={(e) => document.getElementById('duration-val').innerText = e.target.value + ' Months'}
+                                value={duration}
+                                onChange={(e) => setDuration(e.target.value)}
                             />
-                            <div className="text-center fw-bold" style={{ color: '#915200' }} id="duration-val">{currentChit?.duration || 11} Months</div>
+                            <div className="text-center fw-bold" style={{ color: '#915200' }}>{duration} Months</div>
                         </Form.Group>
                         <Form.Group className="mb-4">
                             <Form.Label style={{ color: '#915200' }}>Description / Benefits</Form.Label>
@@ -144,6 +396,29 @@ const ManageChits = ({ merchantId }) => {
                         </Button>
                     </Form>
                 </Modal.Body>
+            </Modal>
+            {/* Upgrade Confirmation Modal */}
+            <Modal show={showUpgradeModal} onHide={() => setShowUpgradeModal(false)} centered>
+                <Modal.Header closeButton className="border-0 bg-warning bg-opacity-10">
+                    <Modal.Title className="fw-bold text-warning-emphasis"><i className="fas fa-crown me-2"></i>Upgrade to Premium</Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="text-center p-4">
+                    <div className="mb-3">
+                        <i className="fas fa-gem fa-3x text-warning mb-3"></i>
+                        <h4 className="fw-bold">Unlock Unlimited Possibilities</h4>
+                        <p className="text-muted">Upgrade to the Premium plan to create unlimited chit plans and grow your business without limits.</p>
+                        <hr />
+                        <div className="display-6 fw-bold text-success">₹5000<span className="fs-6 text-muted">/year</span></div>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="border-0 justify-content-center pb-4">
+                    <Button variant="light" onClick={() => setShowUpgradeModal(false)} className="px-4 fw-bold text-muted">
+                        Cancel
+                    </Button>
+                    <Button variant="dark" className="px-5 rounded-pill fw-bold" onClick={processUpgradePayment}>
+                        Pay & Upgrade
+                    </Button>
+                </Modal.Footer>
             </Modal>
         </div>
     );

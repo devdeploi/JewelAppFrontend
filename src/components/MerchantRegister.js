@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
 import { Form, Button, Card, Row, Col, InputGroup, ProgressBar } from 'react-bootstrap';
 import './Login.css';
+import axios from 'axios';
+import { APIURL } from '../utils/Function';
+import { useRazorpay } from "react-razorpay";
+import { useState } from 'react';
 
 const MerchantRegister = ({ onRegister, onSwitchToLogin }) => {
+    const { Razorpay } = useRazorpay();
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
         name: '',
@@ -10,8 +14,9 @@ const MerchantRegister = ({ onRegister, onSwitchToLogin }) => {
         password: '',
         phone: '',
         address: '',
-        plan: 'Standard'
+        plan: 'Standard',
     });
+
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -73,15 +78,106 @@ const MerchantRegister = ({ onRegister, onSwitchToLogin }) => {
         setFormData({ ...formData, plan: planName });
     };
 
-    const handlePaymentAndRegister = () => {
-        // Simulation of payment
-        alert(`Simulating Payment for ${formData.plan} Plan... Success!`);
-        onRegister({ ...formData, role: 'merchant', id: Date.now() });
+    const handlePaymentAndRegister = async () => {
+        const selectedPlan = plans.find(p => p.name === formData.plan);
+        if (!selectedPlan) return alert("Please select a plan");
+
+        // Double check email before payment
+        try {
+            const { data } = await axios.post(`${APIURL}/check-email`, { email: formData.email });
+            if (data.exists) {
+                alert("Email already registered. canceling payment process. Please login.");
+                onSwitchToLogin();
+                return;
+            }
+        } catch (error) {
+            console.error(error);
+            // inhibit blocking if check fails, or block?
+            // Safer to block to avoid money deduction for dup account
+            alert("Unable to verify account availability. Please try again.");
+            return;
+        }
+
+        try {
+            // 1. Create Order
+            const { data: order } = await axios.post(`${APIURL}/payments/create-subscription-order`, {
+                amount: selectedPlan.price
+            });
+
+            // 2. Initialize Razorpay
+            const options = {
+                key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_S0aFMLxRqwkL8z", // Replace with your actual Razorpay Key ID
+                amount: order.amount,
+                currency: order.currency,
+                name: "Aurum Jewellery",
+                description: `Subscription for ${formData.plan} Plan`,
+                order_id: order.id,
+                handler: async function (response) {
+                    // 3. Verify Payment
+                    try {
+                        const verifyRes = await axios.post(`${APIURL}/payments/verify-subscription-payment`, {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature
+                        });
+
+                        if (verifyRes.data.status === 'success') {
+                            // 4. Register Merchant
+                            await registerMerchant(response.razorpay_payment_id);
+                        } else {
+                            alert("Payment verification failed");
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert("Payment verification failed");
+                    }
+                },
+                prefill: {
+                    name: formData.name,
+                    email: formData.email,
+                    contact: formData.phone
+                },
+                theme: {
+                    color: "#915200"
+                }
+            };
+
+            const rzp1 = new Razorpay(options);
+            rzp1.on('payment.failed', function (response) {
+                alert(response.error.description);
+            });
+            rzp1.open();
+
+        } catch (error) {
+            console.error(error);
+            alert(error.response?.data?.message || 'Order creation failed');
+        }
+    };
+
+    const registerMerchant = async (paymentId) => {
+        try {
+            const payload = {
+                name: formData.name,
+                email: formData.email,
+                password: formData.password,
+                phone: formData.phone,
+                address: formData.address,
+                plan: formData.plan,
+                paymentId: paymentId
+            };
+
+            const { data } = await axios.post(`${APIURL}/merchants`, payload);
+            alert(`Registration Successful! Welcome ${data.name}.\nPlease wait for Admin approval before logging in.`);
+            onSwitchToLogin();
+        } catch (error) {
+            console.error(error);
+            alert(error.response?.data?.message || 'Registration failed');
+        }
     };
 
     return (
         <div className="login-container" style={{ padding: '0 20px', overflow: 'hidden' }}> {/* Prevent body scroll issues */}
-            <Card className="login-card" style={{ maxWidth: step === 2 ? '900px' : '500px', padding: '2rem', maxHeight: '95vh', overflowY: 'auto' }}>
+            <Card className="login-card" style={{ maxWidth: step === 2 ? '700px' : '700px', padding: '2rem', maxHeight: '100vh', overflowY: 'auto' }}>
                 <div className="text-center mb-3">
                     <i className="fas fa-store fa-2x mb-2" style={{ color: '#915200' }}></i>
                     <h3 className="mb-0" style={{ color: '#915200' }}>Merchant Registration</h3>
@@ -116,53 +212,70 @@ const MerchantRegister = ({ onRegister, onSwitchToLogin }) => {
                             </Col>
                         </Row>
 
-                        <Form.Group className="mb-2">
-                            <InputGroup size="sm">
-                                <Form.Control
-                                    name="password"
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Password"
-                                    required
-                                    onChange={handleChange}
-                                    value={formData.password}
-                                />
-                                <InputGroup.Text
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    style={{ cursor: 'pointer', color: '#915200' }}
-                                >
-                                    <i className={showPassword ? "fas fa-eye-slash" : "fas fa-eye"}></i>
-                                </InputGroup.Text>
-                            </InputGroup>
-                            <ProgressBar
-                                now={passwordStrength}
-                                variant={passwordStrength < 50 ? 'danger' : passwordStrength < 80 ? 'warning' : 'success'}
-                                className="mt-1"
-                                style={{ height: '3px' }}
-                            />
-                            <Form.Text style={{ fontSize: '0.7rem', color: '#915200' }}>
-                                8+ chars, upper, lower, numbers, & symbols.
-                            </Form.Text>
-                        </Form.Group>
 
-                        <Form.Group className="mb-3">
-                            <InputGroup size="sm">
-                                <Form.Control
-                                    name="confirmPassword"
-                                    type={showConfirmPassword ? "text" : "password"}
-                                    placeholder="Confirm Password"
-                                    required
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    value={confirmPassword}
-                                />
-                                <InputGroup.Text
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    style={{ cursor: 'pointer', color: '#915200' }}
-                                >
-                                    <i className={showConfirmPassword ? "fas fa-eye-slash" : "fas fa-eye"}></i>
-                                </InputGroup.Text>
-                            </InputGroup>
-                            {passwordError && <p className="text-danger mt-1 small mb-0">{passwordError}</p>}
-                        </Form.Group>
+
+
+
+                        <h5 className="mb-3 mt-4" style={{ color: '#915200' }}>Security</h5>
+                        <Row>
+                            <Col>
+                                <Form.Group className="mb-2">
+                                    <InputGroup size="sm">
+                                        <Form.Control
+                                            name="password"
+                                            type={showPassword ? "text" : "password"}
+                                            placeholder="Password"
+                                            required
+                                            onChange={handleChange}
+                                            value={formData.password}
+                                        />
+                                        <InputGroup.Text
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            style={{ cursor: 'pointer', color: '#915200' }}
+                                        >
+                                            <i className={showPassword ? "fas fa-eye-slash" : "fas fa-eye"}></i>
+                                        </InputGroup.Text>
+                                    </InputGroup>
+                                    <ProgressBar
+                                        now={passwordStrength}
+                                        variant={passwordStrength < 50 ? 'danger' : passwordStrength < 80 ? 'warning' : 'success'}
+                                        className="mt-1"
+                                        style={{ height: '3px' }}
+                                    />
+                                    <Form.Text style={{ fontSize: '0.7rem', color: '#915200' }}>
+                                        8+ chars, upper, lower, numbers, & symbols.
+                                    </Form.Text>
+                                </Form.Group>
+
+
+                            </Col>
+                            <Col>
+                                <Form.Group className="mb-3">
+                                    <InputGroup size="sm">
+                                        <Form.Control
+                                            name="confirmPassword"
+                                            type={showConfirmPassword ? "text" : "password"}
+                                            placeholder="Confirm Password"
+                                            required
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            value={confirmPassword}
+                                        />
+                                        <InputGroup.Text
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            style={{ cursor: 'pointer', color: '#915200' }}
+                                        >
+                                            <i className={showConfirmPassword ? "fas fa-eye-slash" : "fas fa-eye"}></i>
+                                        </InputGroup.Text>
+
+                                    </InputGroup>
+
+                                    <Form.Text className='fw-bold' style={{ fontSize: '0.7rem', color: '#915200' }}>
+                                        Passwords must match.
+                                    </Form.Text>
+                                    {passwordError && <p className="text-danger mt-1 small mb-0">{passwordError}</p>}
+                                </Form.Group>
+                            </Col>
+                        </Row>
 
                         <Button variant="primary" type="submit" className="w-100 mb-2" size="sm">
                             Next: Select Plan

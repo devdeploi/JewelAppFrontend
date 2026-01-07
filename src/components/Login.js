@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Form, Button, Card, InputGroup, ProgressBar } from 'react-bootstrap';
+import { Form, Button, Card, InputGroup, ProgressBar, Alert } from 'react-bootstrap';
 import OtpInput from 'react-otp-input';
 import './Login.css';
+import axios from 'axios';
+import { APIURL } from '../utils/Function';
 
 const Login = ({ onLogin, onRegisterClick }) => {
     const [email, setEmail] = useState('');
@@ -14,7 +16,6 @@ const Login = ({ onLogin, onRegisterClick }) => {
     const [resetStep, setResetStep] = useState(1); // 1: Email, 2: OTP, 3: New Password
     const [resetEmail, setResetEmail] = useState('');
     const [otp, setOtp] = useState('');
-    const [generatedOtp, setGeneratedOtp] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmNewPassword, setConfirmNewPassword] = useState('');
     const [showNewPassword, setShowNewPassword] = useState(false);
@@ -23,53 +24,64 @@ const Login = ({ onLogin, onRegisterClick }) => {
     const [resetError, setResetError] = useState('');
     const [passwordStrength, setPasswordStrength] = useState(0);
 
-    const handleSubmit = (e) => {
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
 
-        // Simple logic to distinguish: 
-        // Admin: admin@jewel.com
-        // Merchant: anything else (simulated usually, or check against mockData)
-
-        if (email === 'admin@jewel.com' && password === 'maaz@eache') {
-            onLogin('admin', { name: 'Super Admin', role: 'admin' });
-        } else if (email.includes('@')) {
-            // Assume merchant login for demo if not admin
-            // In real app, check DB.
-            onLogin('merchant', {
-                name: 'Demo Merchant',
-                email: email,
-                role: 'merchant',
-                id: 1, // mapping to mockData ID 1
-                plan: "Premium",
-                phone: "123-456-7890",
-                address: "123 Market St"
-            });
-        } else {
-            setError('Invalid credentials');
+        try {
+            // Try User/Admin Login first
+            try {
+                const { data } = await axios.post(`${APIURL}/users/login`, { email, password });
+                localStorage.setItem('user', JSON.stringify(data));
+                onLogin(data.role, data);
+            } catch (err) {
+                // If User login fails, try Merchant Login
+                if (err.response && (err.response.status === 401 || err.response.status === 404)) {
+                    const { data } = await axios.post(`${APIURL}/merchants/login`, { email, password });
+                    localStorage.setItem('user', JSON.stringify(data));
+                    onLogin('merchant', data);
+                } else {
+                    throw err;
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            setError(error.response?.data?.message || 'Invalid credentials');
         }
     };
 
-    const handleSendOtp = (e) => {
+    const handleSendOtp = async (e) => {
         e.preventDefault();
+        setResetError('');
         if (resetEmail && resetEmail.includes('@')) {
-            // Simulate OTP generation
-            const randomOtp = Math.floor(100000 + Math.random() * 900000).toString();
-            setGeneratedOtp(randomOtp);
-            alert(`OTP Sent to ${resetEmail}: ${randomOtp}`); // Simulation
-            setResetStep(2);
-            setResetError('');
+            setIsLoading(true);
+            try {
+                await axios.post(`${APIURL}/forgot-password`, { email: resetEmail });
+                setResetStep(2);
+                setResetError('');
+                setResetMessage(`OTP sent to ${resetEmail}`);
+                setTimeout(() => setResetMessage(''), 3000);
+            } catch (err) {
+                setResetError(err.response?.data?.message || 'Error sending OTP');
+            } finally {
+                setIsLoading(false);
+            }
         } else {
             setResetError('Please enter a valid email.');
         }
     };
 
-    const handleVerifyOtp = (e) => {
+    const handleVerifyOtp = async (e) => {
         e.preventDefault();
-        if (otp === generatedOtp) {
+        setResetError('');
+        try {
+            await axios.post(`${APIURL}/verify-otp`, { email: resetEmail, otp });
             setResetStep(3);
             setResetError('');
-        } else {
-            setResetError('Invalid OTP. Please try again.');
+        } catch (err) {
+            setResetError(err.response?.data?.message || 'Invalid OTP. Please try again.');
         }
     };
 
@@ -89,20 +101,31 @@ const Login = ({ onLogin, onRegisterClick }) => {
         setPasswordStrength(calculateStrength(val));
     };
 
-    const handleResetPassword = (e) => {
+    const handleResetPassword = async (e) => {
         e.preventDefault();
-        if (newPassword === confirmNewPassword && passwordStrength >= 60) { // Require moderate strength
-            setResetMessage('Password reset successful! You can now login.');
-            setResetError('');
-            setTimeout(() => {
-                setIsForgotPassword(false);
-                setResetStep(1);
-                setResetMessage('');
-                setResetEmail('');
-                setNewPassword('');
-                setConfirmNewPassword('');
-                setOtp('');
-            }, 2000);
+        setResetError('');
+        if (newPassword === confirmNewPassword && passwordStrength >= 60) {
+            try {
+                await axios.post(`${APIURL}/reset-password`, {
+                    email: resetEmail,
+                    otp,
+                    newPassword
+                });
+
+                setResetMessage('Password reset successful! You can now login.');
+                setResetError('');
+                setTimeout(() => {
+                    setIsForgotPassword(false);
+                    setResetStep(1);
+                    setResetMessage('');
+                    setResetEmail('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                    setOtp('');
+                }, 2000);
+            } catch (err) {
+                setResetError(err.response?.data?.message || 'Error resetting password');
+            }
         } else {
             if (newPassword !== confirmNewPassword) setResetError('Passwords do not match.');
             else if (passwordStrength < 60) setResetError('Password is too weak.');
@@ -123,24 +146,50 @@ const Login = ({ onLogin, onRegisterClick }) => {
                     <>
                         {resetStep === 1 && (
                             <Form onSubmit={handleSendOtp}>
-                                <Form.Group className="mb-3">
+                                <div className="text-center mb-4">
+                                    <div className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
+                                        style={{ width: '80px', height: '80px', backgroundColor: '#fff4e6' }}>
+                                        <i className="fas fa-envelope-open-text fa-2x" style={{ color: '#915200' }}></i>
+                                    </div>
+                                    <p className="text-muted small px-3">
+                                        Enter your registered email address. We'll send you a One-Time Password (OTP) to reset your account.
+                                    </p>
+                                </div>
+                                <Form.Group className="mb-4">
                                     <Form.Control
                                         type="email"
                                         placeholder="Enter your registered email"
                                         value={resetEmail}
                                         onChange={(e) => setResetEmail(e.target.value)}
                                         required
+                                        className="py-2"
+                                        style={{ borderColor: '#915200' }}
                                     />
                                 </Form.Group>
-                                <Button variant="primary" type="submit" className="w-100 mb-3">
-                                    Send OTP
+                                <Button
+                                    variant="primary"
+                                    type="submit"
+                                    className="w-100 mb-3 py-2 fw-bold"
+                                    disabled={isLoading}
+                                    style={{ backgroundColor: '#915200', borderColor: '#915200' }}
+                                >
+                                    {isLoading ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Sending OTP...
+                                        </>
+                                    ) : (
+                                        'Send Verification Code'
+                                    )}
                                 </Button>
                             </Form>
                         )}
 
                         {resetStep === 2 && (
                             <Form onSubmit={handleVerifyOtp}>
-                                <p className="text-center mb-3" style={{ color: '#915200' }}>OTP sent to {resetEmail}</p>
+                                <p className="text-center fw-semibold mb-3" style={{ color: '#915200' }}>
+                                    Enter the verification code sent to {resetEmail}
+                                </p>
                                 <div className="d-flex justify-content-center mb-4">
                                     <OtpInput
                                         value={otp}
@@ -222,7 +271,32 @@ const Login = ({ onLogin, onRegisterClick }) => {
                             </Form>
                         )}
 
-                        {resetMessage && <p className="text-success text-center">{resetMessage}</p>}
+                        {resetMessage && (
+                            <div
+                                className="d-flex align-items-center justify-content-center mt-3"
+                                style={{
+                                    backgroundColor: "#e6fffa",
+                                    border: "1px solid #b2f5ea",
+                                    borderRadius: "8px",
+                                    padding: "12px 16px",
+                                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                                }}
+                            >
+                                <i
+                                    className="fas fa-check-circle me-2"
+                                    style={{ color: "#0f766e", fontSize: "1.1rem" }}
+                                ></i>
+                                <span
+                                    style={{
+                                        color: "#065f46",
+                                        fontWeight: 600,
+                                        fontSize: "0.95rem",
+                                    }}
+                                >
+                                    {resetMessage}
+                                </span>
+                            </div>
+                        )}
                         {resetError && <p className="text-danger text-center">{resetError}</p>}
 
                         <div className="text-center mt-3">
@@ -242,6 +316,14 @@ const Login = ({ onLogin, onRegisterClick }) => {
                     </>
                 ) : (
                     <Form onSubmit={handleSubmit}>
+                        {error && (
+                            <Alert variant="danger" onClose={() => setError('')} dismissible className="mb-3 shadow-sm border-0" style={{ fontSize: '0.9rem' }}>
+                                <div className="d-flex align-items-center">
+                                    <i className="fas fa-exclamation-circle me-2 fs-5"></i>
+                                    <span>{error}</span>
+                                </div>
+                            </Alert>
+                        )}
                         <Form.Group className="mb-3" controlId="formBasicEmail">
                             <Form.Control
                                 type="email"
@@ -273,12 +355,10 @@ const Login = ({ onLogin, onRegisterClick }) => {
                         <Button variant="primary" type="submit" className="w-100 mb-3">
                             Login
                         </Button>
-                        {error && <p className="text-danger text-center">{error}</p>}
 
                         <div className="text-center mb-3">
                             <span
-                                className="pointer"
-                                style={{ color: "#915200" }}
+                                style={{ color: "#915200", cursor: 'pointer' }}
                                 onClick={() => setIsForgotPassword(true)}
                             >
                                 Forgot Password?
