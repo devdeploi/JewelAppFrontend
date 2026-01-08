@@ -8,7 +8,7 @@ const UserDashboard = ({ user, onLogout }) => {
             {/* Header */}
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h2 style={{ fontFamily: "'Scheherazade New', serif", fontWeight: 700, color: "#915200" }}> <i className="fas fa-gem me-2"></i> AURUM</h2>
+                    <h2 style={{ fontFamily: "'Scheherazade New', serif", fontWeight: 700, color: "#915200" }}> <img src="/images/AURUM.png" alt="Logo" className="me-2" style={{ height: '35px' }} /> AURUM</h2>
                     <p className="text-muted">Welcome, {user?.name}</p>
                 </div>
                 <Button

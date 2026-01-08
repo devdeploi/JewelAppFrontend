@@ -126,9 +126,7 @@ const ManageChits = () => {
     // Strict check: Status must be verified AND critical fields must exist
     const isKycVerified =
         merchantData?.bankDetails?.verificationStatus === 'verified' &&
-        merchantData?.bankDetails?.verifiedName &&
-        merchantData?.panDetails?.status === 'verified' &&
-        merchantData?.panDetails?.verifiedName;
+        merchantData?.bankDetails?.verifiedName;
 
     const canCreate = isKycVerified && (currentCount < planLimit); // Must be verified AND within limit
 
@@ -260,7 +258,7 @@ const ManageChits = () => {
                             placement="left"
                             overlay={<Tooltip>
                                 {!isKycVerified
-                                    ? "KYC Pending! Please verify Bank and PAN details in Profile to create plans."
+                                    ? "KYC Pending! Please verify Bank details in Profile to create plans."
                                     : (isPremium ? "Limit Reached! Maximum 6 plans allowed." : "Limit Reached! Upgrade to Premium to add more plans.")}
                             </Tooltip>}
                         >
@@ -279,9 +277,9 @@ const ManageChits = () => {
                     <div className="d-flex gap-2">
                         {!isPremium && (
                             <Button
-                                variant="outline-warning"
+                                variant="warning"
                                 className="fw-bold rounded-pill"
-                                style={{ color: '#ffc107', borderColor: '#ffc107' }}
+                                style={{ color: '#fff', borderColor: '#ffc107' }}
                                 onClick={handleUpgradeClick}
                             >
                                 <i className="fas fa-crown me-2"></i>Go Premium
@@ -404,7 +402,7 @@ const ManageChits = () => {
                 </Modal.Header>
                 <Modal.Body className="text-center p-4">
                     <div className="mb-3">
-                        <i className="fas fa-gem fa-3x text-warning mb-3"></i>
+                        <img src="/images/AURUM.png" alt="Logo" className="mb-3" style={{ height: '60px' }} />
                         <h4 className="fw-bold">Unlock Unlimited Possibilities</h4>
                         <p className="text-muted">Upgrade to the Premium plan to create unlimited chit plans and grow your business without limits.</p>
                         <hr />

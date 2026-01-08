@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Row, Col, Button, Modal } from 'react-bootstrap';
-import Link from 'react-router-dom';
 import MerchantList from './MerchantList';
 import UserList from './UserList';
 import Subscribers from './Subscribers';
@@ -138,6 +137,7 @@ const Dashboard = ({ onLogout }) => {
             {/* Header */}
             <div className="dashboard-header">
                 <div className="d-flex align-items-center">
+                    <img src="/images/AURUM.png" alt="Logo" className="me-2" style={{ height: '60px', background: 'rgba(255, 255, 255, 0.4)', borderRadius: '50%', padding: '5px' }} />
                     <h2
                         className="dashboard-title me-3"
                         style={{
@@ -148,7 +148,6 @@ const Dashboard = ({ onLogout }) => {
                             textShadow: "0 1px 0 #ffd36a, 0 2px 8px #ffffffff",
                         }}
                     >
-                        <i className="fas fa-gem me-2"></i>
                         AURUM
                     </h2>
 

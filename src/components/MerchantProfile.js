@@ -14,13 +14,9 @@ const MerchantProfile = ({ merchantData }) => {
 
     // Verification States
     const [verifyingBank, setVerifyingBank] = useState(false);
-    const [verifyingPan, setVerifyingPan] = useState(false);
-    const [uploadingPan, setUploadingPan] = useState(false);
-    const [nameMismatch, setNameMismatch] = useState(false);
 
     // Derived states
     const bankVerified = data.bankDetails?.verificationStatus === 'verified';
-    const panVerified = data.panDetails?.status === 'verified';
 
     // Fetch fresh data on mount
     useEffect(() => {
@@ -67,18 +63,7 @@ const MerchantProfile = ({ merchantData }) => {
         }
     };
 
-    const handlePanChange = (e) => {
-        const { name, value } = e.target;
-        setData(prev => ({
-            ...prev,
-            panDetails: {
-                ...prev.panDetails,
-                [name]: value,
-                status: 'unverified',
-                verifiedName: ''
-            }
-        }));
-    };
+
 
     const verifyBankAccount = async () => {
         const { accountNumber, ifscCode, accountHolderName } = data.bankDetails || {};
@@ -110,41 +95,32 @@ const MerchantProfile = ({ merchantData }) => {
         setVerifyingBank(false);
     };
 
-    const verifyPanDetails = async () => {
-        const { panNumber } = data.panDetails || {};
-        if (!panNumber) return alert("Please enter PAN Number");
+    const uploadAddressProofHandler = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('image', file);
 
-        setVerifyingPan(true);
         try {
-            // Pass the bank verified name (or input name) to the mock API to ensure a match
-            const nameToMatch = data.bankDetails?.verifiedName || data.bankDetails?.accountHolderName || '';
-            const { data: resData } = await axios.post(`${APIURL}/kyc/verify-pan`, { panNumber, name: nameToMatch });
+            const user = JSON.parse(localStorage.getItem('user'));
+            const config = { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${user?.token}` } };
+            const { data: imagePath } = await axios.post(`${APIURL}/upload`, formData, config);
 
-            if (resData.status === 'success') {
-                const panVerifiedName = resData.data.verifiedName;
-                const bankVerifiedName = data.bankDetails?.verifiedName;
-
-                const isMatch = bankVerifiedName && panVerifiedName.trim().toLowerCase() === bankVerifiedName.trim().toLowerCase();
-                setNameMismatch(!isMatch);
-
-                setData(prev => ({
-                    ...prev,
-                    panDetails: {
-                        ...prev.panDetails,
-                        verifiedName: panVerifiedName,
-                        status: 'verified'
-                    }
-                }));
-
-                if (!isMatch && bankVerifiedName) {
-                    alert(`Warning: Name Mismatch.\nBank: ${bankVerifiedName}\nPAN: ${panVerifiedName}\nManual review will be required.`);
-                }
-            }
+            setData(prev => ({
+                ...prev,
+                addressProof: imagePath
+            }));
         } catch (error) {
             console.error(error);
-            alert(error.response?.data?.message || "PAN Verification Failed");
+            alert('Address Proof upload failed');
         }
-        setVerifyingPan(false);
+    };
+
+    const removeAddressProofHandler = () => {
+        setData(prev => ({
+            ...prev,
+            addressProof: ''
+        }));
     };
 
     const uploadFileHandler = async (e) => {
@@ -171,35 +147,7 @@ const MerchantProfile = ({ merchantData }) => {
         }
     };
 
-    const uploadPanImageHandler = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const formData = new FormData();
-        formData.append('image', file);
-        setUploadingPan(true);
-        try {
-            const user = JSON.parse(localStorage.getItem('user'));
-            const config = { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${user?.token}` } };
-            const { data: imagePath } = await axios.post(`${APIURL}/upload`, formData, config);
 
-            setData(prev => ({
-                ...prev,
-                panDetails: { ...prev.panDetails, panImage: imagePath }
-            }));
-            setUploadingPan(false);
-        } catch (error) {
-            console.error(error);
-            setUploadingPan(false);
-            alert('PAN Image upload failed');
-        }
-    };
-
-    const removePanImageHandler = () => {
-        setData(prev => ({
-            ...prev,
-            panDetails: { ...prev.panDetails, panImage: '' }
-        }));
-    };
 
     const maskAccountNumber = (value = '') =>
         value.length > 4 ? 'XXXXXX' + value.slice(-4) : value;
@@ -432,12 +380,13 @@ const MerchantProfile = ({ merchantData }) => {
                                 <Row className="g-2">
                                     <Col md={4}>
                                         <Form.Group>
-                                            <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Account Name</Form.Label>
+                                            <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Account Holder Name</Form.Label>
                                             <Form.Control
                                                 name="accountHolderName" // Changed from accountName to accountHolderName to match schema
                                                 value={data.bankDetails?.accountHolderName || ''}
                                                 onChange={handleBankChange}
                                                 disabled={!isEditing}
+                                                placeholder='Enter Account Holder Name'
                                                 // size="sm"
                                                 className="fw-bold"
                                             />
@@ -445,17 +394,39 @@ const MerchantProfile = ({ merchantData }) => {
                                     </Col>
                                     <Col md={3}>
                                         <Form.Group>
-                                            <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Account Number</Form.Label>
+                                            <Form.Label
+                                                className="small fw-bold text-uppercase"
+                                                style={{ color: '#915200' }}
+                                            >
+                                                Account Number
+                                            </Form.Label>
+
                                             <Form.Control
                                                 name="accountNumber"
-                                                value={isEditing ? data.bankDetails?.accountNumber || '' : maskAccountNumber(data.bankDetails?.accountNumber)}
-                                                onChange={handleBankChange}
+                                                value={
+                                                    isEditing
+                                                        ? data.bankDetails?.accountNumber || ''
+                                                        : maskAccountNumber(data.bankDetails?.accountNumber)
+                                                }
+                                                onChange={(e) => {
+                                                    let value = e.target.value.replace(/\D/g, ''); // digits only
+
+                                                    handleBankChange({
+                                                        target: {
+                                                            name: 'accountNumber',
+                                                            value
+                                                        }
+                                                    });
+                                                }}
                                                 disabled={!isEditing}
-                                                // size="sm"
+                                                inputMode="numeric"
+                                                pattern="[0-9]*"
+                                                placeholder="Enter account number"
                                                 className="fw-bold"
                                             />
                                         </Form.Group>
                                     </Col>
+
                                     <Col md={3}>
                                         <Form.Group>
                                             <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>IFSC Code</Form.Label>
@@ -464,6 +435,7 @@ const MerchantProfile = ({ merchantData }) => {
                                                 value={isEditing ? data.bankDetails?.ifscCode || '' : maskIFSC(data.bankDetails?.ifscCode)}
                                                 onChange={handleBankChange}
                                                 disabled={!isEditing}
+                                                placeholder='Enter IFSC code'
                                                 // size="sm"
                                                 className="fw-bold"
                                             />
@@ -492,48 +464,34 @@ const MerchantProfile = ({ merchantData }) => {
                             <div className="d-flex align-items-center my-3">
                                 <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
                                 <span className="mx-3 small fw-bold uppercase" style={{ color: '#915200', letterSpacing: '1px' }}>
-                                    PAN Details (KYC)
+                                    GSTIN Details
                                 </span>
                                 <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
                             </div>
                         </Col>
                         <Col md={12}>
                             <Card className="border-0 bg-light p-3">
-                                {data.panDetails?.verifiedName && (
-                                    <div className="mb-3">
-                                        <div className="text-success small fw-bold"><i className="fas fa-check-circle me-1"></i> Verified Name: {data.panDetails.verifiedName}</div>
-                                        {nameMismatch && <div className="text-danger small fw-bold mt-1"><i className="fas fa-exclamation-triangle me-1"></i> Name Mismatch with Bank Account</div>}
-                                    </div>
-                                )}
                                 <Row className="g-2">
-                                    <Col md={4}>
+                                    <Col md={6}>
                                         <Form.Group>
-                                            <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>PAN Number</Form.Label>
+                                            <Form.Label
+                                                className="small fw-bold text-uppercase"
+                                                style={{ color: '#915200' }}
+                                            >
+                                                GSTIN Number
+                                            </Form.Label>
+
                                             <Form.Control
-                                                name="panNumber"
-                                                value={data.panDetails?.panNumber || ''}
-                                                onChange={handlePanChange}
+                                                name="gstin"
+                                                value={data.gstin || ''}
+                                                onChange={handleChange}
                                                 disabled={!isEditing}
-                                                // size="sm"
+                                                placeholder="Enter GSTIN"
                                                 className="fw-bold"
                                             />
                                         </Form.Group>
                                     </Col>
-                                    <Col md={2} className="d-flex align-items-end">
-                                        {isEditing && (
-                                            <Button
-                                                variant="light"
-                                                // size="sm"
-                                                className="w-100 fw-bold"
-                                                style={{ borderColor: '#915200', color: '#e2d183', backgroundColor: '#915200' }}
-                                                onClick={verifyPanDetails}
-                                                disabled={verifyingPan || panVerified}
-                                            >
-                                                {verifyingPan ? <Spinner size="sm" animation="border" /> : panVerified ? "Verified" : "Verify PAN"}
-                                            </Button>
-                                        )}
-                                        {!isEditing && panVerified && <Badge bg={nameMismatch ? "warning" : "success"} className="mb-2">Verified</Badge>}
-                                    </Col>
+
                                     <Col md={12}>
                                         <Form.Group className="mb-3">
                                             {/* Label */}
@@ -541,59 +499,64 @@ const MerchantProfile = ({ merchantData }) => {
                                                 className="small fw-bold text-uppercase"
                                                 style={{ color: '#915200' }}
                                             >
-                                                PAN Card Image
+                                                Address Proof
                                             </Form.Label>
 
                                             {/* Image / Upload Section */}
                                             <div className="mt-2">
-                                                {data.panDetails?.panImage ? (
+                                                {data.addressProof ? (
                                                     <div className="position-relative d-inline-block">
                                                         <img
-                                                            src={`${APIURL.replace('/api', '')}${data.panDetails.panImage}`}
-                                                            alt="PAN"
-                                                            style={{
-                                                                height: '100px',
-                                                                borderRadius: '6px',
-                                                                border: '1px solid #ddd'
-                                                            }}
+                                                            src={`${APIURL.replace('/api', '')}${data.addressProof}`}
+                                                            alt="Address Proof"
+                                                            className="img-fluid rounded border shadow-sm"
+                                                            style={{ height: '120px', objectFit: 'cover' }}
                                                         />
 
                                                         {isEditing && (
                                                             <Button
+                                                                type="button"
                                                                 variant="danger"
                                                                 size="sm"
-                                                                className="position-absolute top-0 end-0 p-0"
+                                                                className="position-absolute top-0 end-0 rounded-circle shadow-sm d-flex align-items-center justify-content-center"
                                                                 style={{
-                                                                    width: 20,
-                                                                    height: 20,
-                                                                    borderRadius: '50%',
-                                                                    fontSize: 10,
-                                                                    transform: 'translate(50%, -50%)'
+                                                                    width: '24px',
+                                                                    height: '24px',
+                                                                    padding: 0,
+                                                                    transform: 'translate(50%, -50%)',
+                                                                    border: '2px solid white'
                                                                 }}
-                                                                onClick={removePanImageHandler}
+                                                                onClick={removeAddressProofHandler}
+                                                                title="Remove Address Proof"
                                                             >
-                                                                ×
+                                                                <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
                                                             </Button>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    isEditing && (
-                                                        <>
+                                                    <>
+                                                        {/* NO IMAGE STATE */}
+                                                        <div
+                                                            className="small text-muted fw-semibold mb-2"
+                                                            style={{ fontStyle: 'italic' }}
+                                                        >
+                                                            No Address Proof uploaded
+                                                        </div>
+
+                                                        {/* UPLOAD ONLY IN EDIT MODE */}
+                                                        {isEditing && (
                                                             <Form.Control
                                                                 type="file"
                                                                 size="sm"
                                                                 accept="image/*"
-                                                                onChange={uploadPanImageHandler}
+                                                                onChange={uploadAddressProofHandler}
+                                                                className="fw-bold"
                                                             />
-                                                            {uploadingPan && (
-                                                                <div className="small text-muted mt-1">
-                                                                    Uploading...
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    )
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
+
                                         </Form.Group>
                                     </Col>
 
@@ -604,24 +567,54 @@ const MerchantProfile = ({ merchantData }) => {
                         <Col md={12}>
                             <h6 className="mt-3 fw-bold" style={{ color: '#915200' }}>Shop Images</h6>
                             <div className="d-flex flex-wrap gap-2 mb-2">
-                                {data.shopImages && data.shopImages.map((img, idx) => (
-                                    <div key={idx} className="position-relative">
-                                        <img src={`${APIURL.replace('/api', '')}${img}`} alt="Shop" style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
-                                        {isEditing && (
-                                            <Button
-                                                variant="danger"
-                                                size="sm"
-                                                className="position-absolute top-0 end-0 p-0"
-                                                style={{ width: 20, height: 20, borderRadius: '50%', fontSize: 10 }}
-                                                onClick={() => {
-                                                    const newImages = data.shopImages.filter((_, i) => i !== idx);
-                                                    setData({ ...data, shopImages: newImages });
+                                {data.shopImages && data.shopImages.length > 0 ? (
+                                    data.shopImages.map((img, idx) => (
+                                        <div key={idx} className="position-relative">
+                                            <img
+                                                src={`${APIURL.replace('/api', '')}${img}`}
+                                                alt="Shop"
+                                                style={{
+                                                    width: 100,
+                                                    height: 100,
+                                                    objectFit: 'cover',
+                                                    borderRadius: 8,
+                                                    border: '1px solid #ddd'
                                                 }}
-                                            >X</Button>
-                                        )}
+                                            />
+
+                                            {isEditing && (
+                                                <Button
+                                                    type="button"
+                                                    variant="danger"
+                                                    size="sm"
+                                                    className="position-absolute top-0 end-0 rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                                                    style={{
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        padding: 0,
+                                                        transform: 'translate(50%, -50%)',
+                                                        border: '2px solid white'
+                                                    }}
+                                                    onClick={() => {
+                                                        const newImages = data.shopImages.filter((_, i) => i !== idx);
+                                                        setData({ ...data, shopImages: newImages });
+                                                    }}
+                                                >
+                                                    <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div
+                                        className="small text-muted fw-semibold"
+                                        style={{ fontStyle: 'italic' }}
+                                    >
+                                        No shop images uploaded yet
                                     </div>
-                                ))}
+                                )}
                             </div>
+
                             {isEditing && (
                                 <Form.Control
                                     type="file"
@@ -701,7 +694,7 @@ const MerchantProfile = ({ merchantData }) => {
                         </div>
                         <div className="modal-body text-center p-4">
                             <div className="mb-3">
-                                <i className="fas fa-gem fa-3x text-warning mb-3"></i>
+                                <img src="/images/AURUM.png" alt="Logo" className="mb-3" style={{ height: '60px' }} />
                                 <h3 className="fw-bold">Premium Benefits</h3>
                                 <ul className="list-unstyled text-start mx-auto mt-3" style={{ maxWidth: '300px' }}>
                                     <li className="mb-2"><i className="fas fa-check-circle text-success me-2"></i>Unlimited Chit Plans</li>

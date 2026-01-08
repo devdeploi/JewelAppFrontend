@@ -229,6 +229,7 @@ const MerchantDashboard = ({ user, onLogout }) => {
         <div className="dashboard-container">
             <div className="dashboard-header">
                 <div className="d-flex align-items-center">
+                    <img src="/images/AURUM.png" alt="Logo" className="me-2" style={{ height: '60px' }} />
                     <h2
                         className="dashboard-title me-3"
                         style={{
@@ -239,7 +240,6 @@ const MerchantDashboard = ({ user, onLogout }) => {
                             textShadow: "0 1px 0 #ffd36a, 0 2px 8px #ffffffff",
                         }}
                     >
-                        <i className="fas fa-gem me-2"></i>
                         AURUM
                     </h2>
                     <div

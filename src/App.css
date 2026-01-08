@@ -18,3 +18,64 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Landing Page Animations */
+@keyframes scrollMarquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-container {
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 20px 0;
+}
+
+.marquee-content {
+  display: inline-flex;
+  animation: scrollMarquee 30s linear infinite;
+}
+
+.marquee-content:hover {
+  animation-play-state: paused;
+}
+
+.app-screen-card {
+  width: 300px;
+  height: 500px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin: 0 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eee;
+  flex-shrink: 0;
+}
+
+.flow-step {
+  position: relative;
+  z-index: 1;
+}
+
+.flow-connector {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #e9ecef;
+  z-index: 0;
+  transform: translateY(-50%);
+}
+
+.transform-hover:hover {
+  transform: translateY(-5px);
+}

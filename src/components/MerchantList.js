@@ -9,6 +9,7 @@ const MerchantList = ({ mode = 'admin' }) => {
     const [selectedMerchant, setSelectedMerchant] = useState(null);
     const [merchantsList, setMerchantsList] = useState([]);
     const [merchantChits, setMerchantChits] = useState([]);
+    const [actionLoading, setActionLoading] = useState(false);
 
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -73,6 +74,7 @@ const MerchantList = ({ mode = 'admin' }) => {
 
     const executeAction = async () => {
         try {
+            setActionLoading(true);
             const config = getAuthConfig();
             const { action, id } = confirmation;
             if (action === 'Delete') {
@@ -92,6 +94,8 @@ const MerchantList = ({ mode = 'admin' }) => {
         } catch (error) {
             console.error(error);
             alert(`Failed to ${confirmation.action}`);
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -111,6 +115,28 @@ const MerchantList = ({ mode = 'admin' }) => {
         setShowModal(false);
         setSelectedMerchant(null);
         setMerchantChits([]);
+    };
+
+    const handleDownload = async (url, filename) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const link = document.createElement('button');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = filename;
+
+            // Create a temporary anchor element to trigger the download
+            const a = document.createElement('a');
+            a.href = link.href;
+            a.download = link.download;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(link.href);
+        } catch (error) {
+            console.error("Download failed", error);
+            alert("Failed to download file");
+        }
     };
 
     return (
@@ -193,7 +219,7 @@ const MerchantList = ({ mode = 'admin' }) => {
                                                 {merchant.status === 'Approved' && (
                                                     <>
                                                         <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Reject')}>Reject</Button>
-                                                        {/* <Button size="sm" variant="outline-dark" style={{ borderColor: '#915200', color: '#915200' }} onClick={() => triggerAction(merchant, 'Pending')}>Pending</Button> */}
+                                                        <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Pending')}>Pending</Button>
                                                     </>
                                                 )}
                                                 {merchant.status === 'Rejected' && (
@@ -269,6 +295,34 @@ const MerchantList = ({ mode = 'admin' }) => {
                                     {mode !== 'public' && <p className="mb-1"><strong>Status:</strong> <span className={`text-${selectedMerchant.status === 'Approved' ? 'success' : 'warning'}`}>{selectedMerchant.status}</span></p>}
                                     <p className="mb-0"><strong>Joined:</strong> {new Date(selectedMerchant.createdAt).toLocaleDateString()}</p>
                                 </Col>
+                                <Col md={12} className="mt-3">
+                                    <h6 className="text-secondary text-uppercase small fw-bold">GSTIN & Verification</h6>
+                                    <p className="mb-1"><strong>GSTIN:</strong> {selectedMerchant.gstin || 'N/A'}</p>
+                                    {selectedMerchant.addressProof ? (
+                                        <div className="mt-2">
+                                            <p className="mb-1 fw-bold small">Address Proof:</p>
+                                            <div className="d-flex align-items-center gap-3">
+                                                <img
+                                                    src={`${APIURL.replace('/api', '')}${selectedMerchant.addressProof}`}
+                                                    alt="Address Proof"
+                                                    style={{ height: 80, borderRadius: 6, border: '1px solid #dee2e6' }}
+                                                />
+                                                <Button
+                                                    variant="outline-dark"
+                                                    size="sm"
+                                                    onClick={() => handleDownload(
+                                                        `${APIURL.replace('/api', '')}${selectedMerchant.addressProof}`,
+                                                        `AddressProof_${selectedMerchant.name.replace(/\s+/g, '_')}.jpg`
+                                                    )}
+                                                >
+                                                    <i className="fas fa-download me-1"></i> Download
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted small">No address proof uploaded.</p>
+                                    )}
+                                </Col>
                             </Row>
 
                             <hr className="text-muted opacity-25" />
@@ -327,23 +381,39 @@ const MerchantList = ({ mode = 'admin' }) => {
             </Modal>
 
             {/* Confirmation Modal */}
-            <Modal show={confirmation.show} onHide={() => setConfirmation({ ...confirmation, show: false })} centered>
-                <Modal.Header closeButton className="border-0">
-                    <Modal.Title style={{ color: '#915200' }}>Confirm Action</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <p>Are you sure you want to <strong>{confirmation.action}</strong> merchant <strong style={{ color: '#915200' }}>{confirmation.merchantName}</strong>?</p>
-                    {confirmation.action === 'Delete' && <p className="text-danger fw-bold small">This action cannot be undone.</p>}
-                </Modal.Body>
-                <Modal.Footer className="border-0">
-                    <Button variant="secondary" onClick={() => setConfirmation({ ...confirmation, show: false })}>Cancel</Button>
-                    <Button
-                        style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }}
-                        onClick={executeAction}
-                    >
-                        Yes, {confirmation.action}
-                    </Button>
-                </Modal.Footer>
+            <Modal show={confirmation.show} onHide={() => !actionLoading && setConfirmation({ ...confirmation, show: false })} centered backdrop={actionLoading ? 'static' : true} keyboard={!actionLoading}>
+                {!actionLoading ? (
+                    <>
+                        <Modal.Header closeButton className="border-0">
+                            <Modal.Title style={{ color: '#915200' }}>Confirm Action</Modal.Title>
+                        </Modal.Header>
+                        <Modal.Body className="py-4">
+                            <p className="mb-0">Are you sure you want to <strong>{confirmation.action}</strong> merchant <strong style={{ color: '#915200' }}>{confirmation.merchantName}</strong>?</p>
+                            {confirmation.action === 'Delete' && <p className="text-danger fw-bold small mt-2"><i className="fas fa-exclamation-triangle me-1"></i> This action cannot be undone.</p>}
+                        </Modal.Body>
+                        <Modal.Footer className="border-0 pt-0">
+                            <Button variant="outline-secondary" onClick={() => setConfirmation({ ...confirmation, show: false })}>Cancel</Button>
+                            <Button
+                                style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }}
+                                onClick={executeAction}
+                            >
+                                Yes, {confirmation.action}
+                            </Button>
+                        </Modal.Footer>
+                    </>
+                ) : (
+                    <Modal.Body className="text-center py-5">
+                        <div className="position-relative d-inline-block mb-4">
+                            <div className="spinner-border text-warning position-absolute top-50 start-50 translate-middle" style={{ width: '5rem', height: '5rem', opacity: 0.3 }} role="status"></div>
+                            <div className="rounded-circle d-flex align-items-center justify-content-center bg-light shadow-sm position-relative" style={{ width: '80px', height: '80px', zIndex: 1 }}>
+                                <i className="fas fa-envelope fa-2x animate__animated animate__tada" style={{ color: '#915200' }}></i>
+                            </div>
+                            <i className="fas fa-paper-plane position-absolute top-0 start-100 translate-middle text-success fa-lg animate__animated animate__fadeInUp animate__infinite" style={{ animationDuration: '1.5s' }}></i>
+                        </div>
+                        <h5 className="fw-bold mb-2 type-writer" style={{ color: '#915200' }}>Sending Notification...</h5>
+                        <p className="text-muted small mb-0">Please wait while we update the status and notify the merchant via email.</p>
+                    </Modal.Body>
+                )}
             </Modal>
         </div>
     );

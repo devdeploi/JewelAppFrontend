@@ -8,10 +8,14 @@ import MerchantRegister from './components/MerchantRegister';
 
 import UserDashboard from './components/UserDashboard';
 
+import LandingPage from './components/LandingPage';
+import TermsOfService from './components/TermsOfService';
+import PrivacyPolicy from './components/PrivacyPolicy';
+
 // Protected Route Component
 const ProtectedRoute = ({ userRole, allowedRole, children }) => {
   if (!userRole) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/aurum/login" replace />; // Redirect unauthenticated users to login
   }
   // Allow if role matches OR if allowedRole is array/generic (simplified here)
   if (allowedRole && userRole !== allowedRole) {
@@ -39,7 +43,7 @@ const RegisterWrapper = ({ onRegister }) => {
   return (
     <MerchantRegister
       onRegister={onRegister}
-      onSwitchToLogin={() => navigate('/')}
+      onSwitchToLogin={() => navigate('/aurum/login')}
     />
   );
 };
@@ -81,8 +85,11 @@ function App() {
       <div className="app-container">
         <Routes>
           {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route
-            path="/"
+            path="/aurum/login"
             element={
               !userRole ? (
                 <LoginWrapper onLogin={handleLogin} />
