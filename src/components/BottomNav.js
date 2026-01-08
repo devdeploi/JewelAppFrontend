@@ -1,4 +1,3 @@
-import React from 'react';
 import './BottomNav.css';
 
 const BottomNav = ({ activeTab, onTabChange, tabs }) => {
