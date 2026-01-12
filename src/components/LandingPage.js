@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Button, Card, Navbar, Nav, Badge, Offcanvas } from 'react-bootstrap';
+import { Container, Row, Col, Button, Card, Navbar, Nav, Offcanvas } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
@@ -66,7 +66,7 @@ const LandingPage = () => {
     ];
 
     return (
-        <div style={{ fontFamily: '"Roboto", sans-serif', backgroundColor: '#fff', overflowX: 'hidden' }}>
+        <div style={{ fontFamily: '"DM Sans", sans-serif', backgroundColor: '#fff', overflowX: 'hidden' }}>
 
             {/* Navigation */}
             <Navbar
@@ -127,9 +127,22 @@ const LandingPage = () => {
                 <Container className="position-relative" style={{ zIndex: 2 }}>
                     <Row className="align-items-center">
                         <Col lg={6} className="mb-5 mb-lg-0">
-                            <Badge bg="warning" text="dark" className="mb-3 px-3 py-2 rounded-pill fw-bold">
+                            {/* <Badge bg="warning" text="dark" className="mb-3 px-3 py-2 rounded-pill fw-bold">
                                 <i className="fas fa-star me-2"></i> #1 Platform for Jewellers
-                            </Badge>
+                            </Badge> */}
+                            <div className="d-inline-flex align-items-center justify-content-center mb-3 px-3 py-1 rounded-pill border"
+                                style={{
+                                    borderColor: `${goldColor}30`,
+                                    background: '#fff',
+                                    boxShadow: '0 4px 12px rgba(145, 82, 0, 0.08)'
+                                }}>
+                                <span className="fw-bold small text-uppercase" style={{
+                                    color: brandColor,
+                                    letterSpacing: '2px'
+                                }}>
+                                    <i className="fas fa-star me-2"></i>#1 Platform for Jewellers
+                                </span>
+                            </div>
                             <h1 className="display-4 display-lg-3 fw-bold mb-4 text-dark" style={{ lineHeight: 1.2 }}>
                                 Digitalize Your <span style={{ color: brandColor }}>Gold Chit</span> Business
                             </h1>
@@ -187,16 +200,24 @@ const LandingPage = () => {
                                         {/* Center content */}
                                         <div className="text-center position-relative" style={{ zIndex: 2 }}>
                                             <div className="mb-4 position-relative">
-                                                <i className="fas fa-gem fa-6x" style={{ color: goldColor, animation: 'pulse 3s ease-in-out infinite' }}></i>
+                                                <img
+                                                    src="/images/AURUM.png"
+                                                    alt="Aurum Logo"
+                                                    className="img-fluid"
+                                                    style={{
+                                                        height: '180px',
+                                                        animation: 'pulse 3s ease-in-out infinite',
+                                                        filter: 'drop-shadow(0 10px 20px rgba(212, 175, 55, 0.3))'
+                                                    }}
+                                                />
                                                 <div className="position-absolute" style={{
-                                                    top: '-10px',
-                                                    right: '-10px',
+                                                    top: '0px',
+                                                    right: '10px',
                                                     animation: 'sparkle 2s ease-in-out infinite'
                                                 }}>
                                                     <i className="fas fa-star" style={{ color: goldColor, fontSize: '1.5rem' }}></i>
                                                 </div>
                                             </div>
-                                            <h3 className="fw-bold" style={{ color: brandColor }}>Smart. Secure. <br /> Simple.</h3>
                                         </div>
 
                                         {/* Orbiting mini icons */}
@@ -721,9 +742,19 @@ const LandingPage = () => {
 
                 <Container className="py-5 position-relative" style={{ zIndex: 1 }}>
                     <div className="text-center mb-5">
-                        <Badge bg="warning" text="dark" className="mb-3 px-4 py-2" style={{ fontSize: '0.9rem' }}>
-                            <i className="fas fa-users me-2"></i>For Customers
-                        </Badge>
+                        <div className="d-inline-flex align-items-center justify-content-center mb-3 px-3 py-1 rounded-pill border"
+                            style={{
+                                borderColor: `${goldColor}30`,
+                                background: '#fff',
+                                boxShadow: '0 4px 12px rgba(145, 82, 0, 0.08)'
+                            }}>
+                            <span className="fw-bold small text-uppercase" style={{
+                                color: brandColor,
+                                letterSpacing: '2px'
+                            }}>
+                                <i className="fas fa-users me-2"></i>for Users
+                            </span>
+                        </div>
                         <h2 className="fw-bold display-5 mb-3">How Users Join & Payment Flow</h2>
                         <p className="opacity-75 lead">Seamless experience from app to payment</p>
                     </div>
@@ -840,9 +871,19 @@ const LandingPage = () => {
             <section id="plans" className="py-5 position-relative" style={{ background: `linear-gradient(to bottom, #fff 0%, ${lightGold}30 100%)` }}>
                 <Container className="py-5">
                     <div className="text-center mb-5">
-                        <Badge bg="light" text="dark" className="border shadow-sm mb-3 px-3 py-2 rounded-pill fw-normal">
-                            <span style={{ color: brandColor, letterSpacing: '1px' }} className="fw-bold text-uppercase">Flexible Pricing</span>
-                        </Badge>
+                        <div className="d-inline-flex align-items-center justify-content-center mb-3 px-3 py-1 rounded-pill border"
+                            style={{
+                                borderColor: `${goldColor}30`,
+                                background: '#fff',
+                                boxShadow: '0 4px 12px rgba(145, 82, 0, 0.08)'
+                            }}>
+                            <span className="fw-bold small text-uppercase" style={{
+                                color: brandColor,
+                                letterSpacing: '2px'
+                            }}>
+                                <i className="fas fa-star me-2"></i>Flexible Pricing
+                            </span>
+                        </div>
                         <h2 className="fw-bold display-5 mb-3 text-dark">Choose the plan that fits you</h2>
                         <p className="text-muted lead mx-auto" style={{ maxWidth: '600px' }}>
                             Simple, transparent pricing to help you grow your jewellery business.
@@ -1034,7 +1075,13 @@ const LandingPage = () => {
 
             <style>
                 {`
-                .hover-scale { 
+                @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,100..1000&family=Outfit:wght@100..900&display=swap');
+
+                h1, h2, h3, h4, h5, h6, .navbar-brand, .display-1, .display-2, .display-3, .display-4, .display-5 {
+                    font-family: 'Outfit', sans-serif;
+                }
+
+                .hover-scale {  
                     transition: transform 0.3s ease, box-shadow 0.3s ease; 
                 }
                 .hover-scale:hover { 

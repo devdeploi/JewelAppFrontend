@@ -169,6 +169,14 @@ const MerchantProfile = ({ merchantData }) => {
             console.log(updatedMerchant);
 
             setData(updatedMerchant); // Update state immediately
+
+            // Update localStorage
+            const storedUser = JSON.parse(localStorage.getItem('user'));
+            if (storedUser) {
+                const updatedUser = { ...storedUser, ...updatedMerchant };
+                localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+
             alert("Profile Updated Successfully!");
             setIsEditing(false);
         } catch (error) {
@@ -264,7 +272,7 @@ const MerchantProfile = ({ merchantData }) => {
         <Card className="border-0 shadow-sm rounded-4 overflow-hidden">
             <div className="p-4 bg-gradient-primary text-white" style={{ background: 'linear-gradient(135deg, #ebdc87 0%, #e2d183 100%)' }}>
                 <div className="d-flex justify-content-between align-items-center">
-                    <h4 className="mb-0 fw-bold" style={{ color: '#915200' }}><i className="fas fa-user-circle me-2"></i>Merchant Profile</h4>
+                    <h4 className="mb-0 fw-bold" style={{ color: '#915200' }}><i className="fas fa-user-circle me-2"></i>MERCHANT PROFILE</h4>
                     <div className="d-flex gap-2">
                         {isEditing && (
                             <Button
