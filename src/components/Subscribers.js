@@ -60,7 +60,13 @@ const Subscribers = () => {
                 // Let's assume just counted by Plan field.
 
                 const total = data.length;
-                const revenue = (premiumCount * 5000) + (standardCount * 1500); // Estimations
+                const revenue = data
+                    .filter(m => m.status === 'Approved')
+                    .reduce((acc, m) => {
+                        if (m.plan === 'Premium') return acc + 5000;
+                        if (m.plan === 'Standard') return acc + 1500;
+                        return acc;
+                    }, 0);
 
                 setStats({
                     premiumCount,
@@ -91,6 +97,7 @@ const Subscribers = () => {
     const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     merchantsList.forEach(m => {
+        if (m.status !== 'Approved') return;
         const date = new Date(m.createdAt);
         const monthIndex = date.getMonth(); // 0 = Jan, 11 = Dec
         // Only consider current year or simplified all-time monthly aggregation

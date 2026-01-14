@@ -263,7 +263,7 @@ const MerchantList = ({ mode = 'admin' }) => {
             <Modal show={showModal} onHide={handleClose} size="lg" centered scrollable>
                 {selectedMerchant && (
                     <>
-                        <Modal.Header className="border-0 pb-0">
+                        <Modal.Header className="border-0 pb-0" closeButton>
                             <Modal.Title className="fw-bold" style={{ color: '#915200' }}>
                                 <i className="fas fa-store me-2"></i>
                                 {selectedMerchant.name}
@@ -381,23 +381,38 @@ const MerchantList = ({ mode = 'admin' }) => {
             </Modal>
 
             {/* Confirmation Modal */}
+            {/* Confirmation Modal */}
             <Modal show={confirmation.show} onHide={() => !actionLoading && setConfirmation({ ...confirmation, show: false })} centered backdrop={actionLoading ? 'static' : true} keyboard={!actionLoading}>
                 {!actionLoading ? (
                     <>
-                        <Modal.Header closeButton className="border-0">
-                            <Modal.Title style={{ color: '#915200' }}>Confirm Action</Modal.Title>
+                        <Modal.Header closeButton className={confirmation.action === 'Delete' ? "bg-danger text-white" : "border-0"}>
+                            <Modal.Title style={{ color: confirmation.action === 'Delete' ? '#fff' : '#915200' }}>
+                                {confirmation.action === 'Delete' ? <><i className="fas fa-exclamation-triangle me-2"></i>Confirm Deletion</> : 'Confirm Action'}
+                            </Modal.Title>
                         </Modal.Header>
-                        <Modal.Body className="py-4">
-                            <p className="mb-0">Are you sure you want to <strong>{confirmation.action}</strong> merchant <strong style={{ color: '#915200' }}>{confirmation.merchantName}</strong>?</p>
-                            {confirmation.action === 'Delete' && <p className="text-danger fw-bold small mt-2"><i className="fas fa-exclamation-triangle me-1"></i> This action cannot be undone.</p>}
+                        <Modal.Body className="text-center py-4">
+                            {confirmation.action === 'Delete' && (
+                                <div className="mb-3 text-danger">
+                                    <i className="fas fa-store-slash fa-3x"></i>
+                                </div>
+                            )}
+                            <h5>Are you sure?</h5>
+                            <p className="text-muted">
+                                Do you really want to <strong>{confirmation.action}</strong> merchant <strong>{confirmation.merchantName}</strong>?
+                                {confirmation.action === 'Delete' && <><br />This process cannot be undone.</>}
+                            </p>
                         </Modal.Body>
-                        <Modal.Footer className="border-0 pt-0">
-                            <Button variant="outline-secondary" onClick={() => setConfirmation({ ...confirmation, show: false })}>Cancel</Button>
+                        <Modal.Footer className="justify-content-center border-0">
+                            <Button variant="secondary" onClick={() => setConfirmation({ ...confirmation, show: false })} className="px-4">
+                                Cancel
+                            </Button>
                             <Button
-                                style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }}
+                                variant={confirmation.action === 'Delete' ? 'danger' : 'primary'}
+                                style={confirmation.action === 'Delete' ? {} : { backgroundColor: '#915200', borderColor: '#915200' }}
                                 onClick={executeAction}
+                                className="px-4"
                             >
-                                Yes, {confirmation.action}
+                                {confirmation.action === 'Delete' ? 'Delete' : `Yes, ${confirmation.action}`}
                             </Button>
                         </Modal.Footer>
                     </>
