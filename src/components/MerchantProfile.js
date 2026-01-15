@@ -185,6 +185,12 @@ const MerchantProfile = ({ merchantData }) => {
         }
     };
 
+    // State for Downgrade Logic
+    const [myChits, setMyChits] = useState([]);
+    const [loadingChits, setLoadingChits] = useState(false);
+    const [showDowngradeModal, setShowDowngradeModal] = useState(false);
+    const standardLimit = 3;
+
     const handleUpgradePayment = async () => {
         try {
             // 1. Create Order
@@ -194,7 +200,7 @@ const MerchantProfile = ({ merchantData }) => {
 
             // 2. Initialize Razorpay
             const options = {
-                key: "rzp_test_S0aFMLxRqwkL8z", // Replace with your actual Razorpay Key ID
+                key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_S0aFMLxRqwkL8z", // Use env or fallback
                 amount: order.amount,
                 currency: order.currency,
                 name: "Aurum Jewellery",
@@ -267,6 +273,105 @@ const MerchantProfile = ({ merchantData }) => {
             alert("Upgrade Failed");
         }
     };
+
+    // --- Downgrade Logic ---
+    const fetchChits = async () => {
+        setLoadingChits(true);
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const config = { headers: { Authorization: `Bearer ${user?.token}` } };
+            const { data } = await axios.get(`${APIURL}/chit-plans/merchant/${merchantData._id}?limit=100`, config);
+            setMyChits(data.plans || []);
+        } catch (error) {
+            console.error("Error fetching chits", error);
+        } finally {
+            setLoadingChits(false);
+        }
+    };
+
+    const handleDowngradeInitiate = () => {
+        fetchChits();
+        setShowDowngradeModal(true);
+    };
+
+    const handleDeleteChit = async (id) => {
+        if (window.confirm("Are you sure you want to delete this plan? This cannot be undone.")) {
+            try {
+                const user = JSON.parse(localStorage.getItem('user'));
+                const config = { headers: { Authorization: `Bearer ${user?.token}` } };
+                await axios.delete(`${APIURL}/chit-plans/${id}`, config);
+                // Update local list
+                setMyChits(prev => prev.filter(c => c._id !== id));
+            } catch (error) {
+                console.error("Error deleting chit plan", error);
+                alert("Failed to delete plan.");
+            }
+        }
+    };
+
+    const processDowngrade = async () => {
+        try {
+            // Initiate standard payment logic (1500 INR)
+            const { data: order } = await axios.post(`${APIURL}/merchants/create-renewal-order`, {
+                plan: 'Standard'
+            }); // Note: Using existing renewal endpoint to create order for Standard
+
+            const user = JSON.parse(localStorage.getItem('user'));
+
+            const options = {
+                key: order.keyId || process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_S0aFMLxRqwkL8z", // keyId might come from create-renewal-order response
+                amount: order.order.amount,
+                currency: order.order.currency,
+                name: "Aurum Jewellery",
+                description: "Downgrade to Standard Plan",
+                order_id: order.order.id,
+                handler: async function (response) {
+                    try {
+                        const verifyPayload = {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            plan: 'Standard'
+                        };
+                        const config = { headers: { Authorization: `Bearer ${user?.token}` } };
+                        const { data: verifyData } = await axios.post(`${APIURL}/merchants/verify-renewal`, verifyPayload, config);
+
+                        if (verifyData.success) {
+                            setData(verifyData.merchant);
+                            // Update Local Storage
+                            const storedUser = JSON.parse(localStorage.getItem('user'));
+                            if (storedUser) {
+                                const updated = { ...storedUser, ...verifyData.merchant };
+                                localStorage.setItem('user', JSON.stringify(updated));
+                            }
+                            alert("Plan Downgraded to Standard Successfully!");
+                            setShowDowngradeModal(false);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert("Downgrade payment verification failed");
+                    }
+                },
+                prefill: {
+                    name: data.name,
+                    email: data.email,
+                    contact: data.phone
+                },
+                theme: { color: "#915200" }
+            };
+
+            const rzp1 = new Razorpay(options);
+            rzp1.open();
+
+        } catch (error) {
+            console.error("Downgrade Error", error);
+            alert("Failed to initiate downgrade payment.");
+        }
+    };
+
+    // Calculate current count dynamically if modal is open
+    const currentChitCount = showDowngradeModal ? myChits.length : 0;
+
 
     return (
         <Card className="border-0 shadow-sm rounded-4 overflow-hidden">
@@ -659,20 +764,31 @@ const MerchantProfile = ({ merchantData }) => {
                                     </div>
                                 </div>
 
-                                {data.plan !== 'Premium' && (
-                                    <Button
-                                        style={{
-                                            background: 'linear-gradient(90deg, #915200 0%, #5a3300 100%)',
-                                            border: 'none',
-                                            boxShadow: '0 4px 12px rgba(145, 82, 0, 0.3)'
-                                        }}
-                                        size="lg"
-                                        className='fw-bold text-white px-4 rounded-pill'
-                                        onClick={() => setShowUpgradeModal(true)}
-                                    >
-                                        Upgrade to Premium <i className="fas fa-arrow-right ms-2"></i>
-                                    </Button>
-                                )}
+                                <div className="d-flex align-items-center gap-2">
+                                    {data.plan === 'Premium' && (
+                                        <Button
+                                            variant="outline-secondary"
+                                            className="fw-bold rounded-pill px-3"
+                                            onClick={handleDowngradeInitiate}
+                                        >
+                                            <i className="fas fa-arrow-down me-2"></i> Downgrade
+                                        </Button>
+                                    )}
+                                    {data.plan !== 'Premium' && (
+                                        <Button
+                                            style={{
+                                                background: 'linear-gradient(90deg, #915200 0%, #5a3300 100%)',
+                                                border: 'none',
+                                                boxShadow: '0 4px 12px rgba(145, 82, 0, 0.3)'
+                                            }}
+                                            size="lg"
+                                            className='fw-bold text-white px-4 rounded-pill'
+                                            onClick={() => setShowUpgradeModal(true)}
+                                        >
+                                            Upgrade to Premium <i className="fas fa-arrow-right ms-2"></i>
+                                        </Button>
+                                    )}
+                                </div>
 
                                 {/* Background Watermark Icon */}
                                 <i
@@ -716,6 +832,81 @@ const MerchantProfile = ({ merchantData }) => {
                         <div className="modal-footer border-0 justify-content-center pb-4">
                             <Button variant="dark" className="px-5 rounded-pill fw-bold" onClick={handleUpgradePayment}>
                                 Pay & Upgrade
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Downgrade Management Modal */}
+            <div className={`modal fade ${showDowngradeModal ? 'show d-block' : ''}`} style={{ background: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
+                <div className="modal-dialog modal-dialog-centered modal-lg">
+                    <div className="modal-content border-0 shadow-lg rounded-4">
+                        <div className="modal-header border-0 pt-4 px-4 bg-light">
+                            <div>
+                                <h4 className="fw-bold text-danger mb-0"><i className="fas fa-exclamation-triangle me-2"></i>Downgrade Action Required</h4>
+                                <p className="text-muted mt-2 mb-0">
+                                    You are initiating a downgrade to <strong>Standard Plan</strong> (Max 3 Chits).
+                                </p>
+                            </div>
+                            <button type="button" className="btn-close" onClick={() => setShowDowngradeModal(false)}></button>
+                        </div>
+                        <div className="modal-body px-4 py-4">
+                            {/* Validation Status */}
+                            {currentChitCount > standardLimit ? (
+                                <div className="alert alert-warning border-0 d-flex align-items-center mb-4">
+                                    <i className="fas fa-info-circle me-3 fa-2x"></i>
+                                    <div>
+                                        You currently have <strong>{currentChitCount}</strong> active plans.
+                                        Please delete <strong>{currentChitCount - standardLimit}</strong> plan(s) to proceed with the downgrade.
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="alert alert-success border-0 d-flex align-items-center mb-4">
+                                    <i className="fas fa-check-circle me-3 fa-2x"></i>
+                                    <div>
+                                        You are within the limits for the Standard Plan. You can proceed with the downgrade payment.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Plan List */}
+                            <h6 className="fw-bold text-secondary mb-3">Manage Your Active Plans</h6>
+                            {loadingChits ? (
+                                <div className="text-center py-5"><div className="spinner-border text-secondary"></div></div>
+                            ) : (
+                                <div className="list-group list-group-flush border rounded-3 overflow-hidden mb-3" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                    {myChits.map(chit => (
+                                        <div key={chit._id} className="list-group-item d-flex justify-content-between align-items-center p-3">
+                                            <div>
+                                                <h6 className="mb-0 fw-bold text-dark">{chit.planName}</h6>
+                                                <small className="text-muted">₹{chit.totalAmount} • {chit.durationMonths} Months</small>
+                                            </div>
+                                            <Button
+                                                variant="outline-danger"
+                                                size="sm"
+                                                className="rounded-pill px-3"
+                                                onClick={() => handleDeleteChit(chit._id)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    {myChits.length === 0 && <div className="p-3 text-center text-muted">No active plans found.</div>}
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer border-0 px-4 pb-4">
+                            <Button variant="light" className="px-4 rounded-pill fw-bold" onClick={() => setShowDowngradeModal(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                variant={currentChitCount <= standardLimit ? "danger" : "secondary"}
+                                className="px-4 rounded-pill fw-bold"
+                                disabled={currentChitCount > standardLimit}
+                                onClick={processDowngrade}
+                            >
+                                {currentChitCount <= standardLimit ? 'Pay & Downgrade (₹1500)' : `Delete ${currentChitCount - standardLimit} More`}
                             </Button>
                         </div>
                     </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, Badge, Pagination, Modal, Button } from 'react-bootstrap';
 // import { users } from '../data/mockData';
 import axios from 'axios';
-import { APIURL, onError } from '../utils/Function';
+import { APIURL, BASEURL, onError } from '../utils/Function';
 
 const UserList = () => {
     const [page, setPage] = useState(1);
@@ -39,7 +39,7 @@ const UserList = () => {
         fetchUsers();
     }, [page, refresh]);
 
-    console.log(usersList);
+    console.log(selectedUser);
 
 
     const handleUserClick = (user) => {
@@ -155,7 +155,7 @@ const UserList = () => {
                     {selectedUser && (
                         <div className="text-center">
                             <img
-                                src={`${APIURL.replace('/api', '')}/${selectedUser.profileImage}`}
+                                src={`${BASEURL}${selectedUser?.profileImage?.startsWith('/') ? '' : '/'}${selectedUser?.profileImage}`}
                                 className="mb-3 border border-warning"
                                 style={{ width: '120px', height: '120px', objectFit: 'contain', borderRadius: '50%' }}
                                 alt={selectedUser.name}

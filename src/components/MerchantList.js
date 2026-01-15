@@ -13,7 +13,11 @@ const MerchantList = ({ mode = 'admin' }) => {
 
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [filters, setFilters] = useState({ status: mode === 'public' ? 'Approved' : '', search: '' });
+    const [filters, setFilters] = useState({
+        status: mode === 'public' ? 'Approved' : '',
+        subscriptionStatus: '',
+        search: ''
+    });
 
     const getAuthConfig = () => {
         const user = JSON.parse(localStorage.getItem('user'));
@@ -37,6 +41,10 @@ const MerchantList = ({ mode = 'admin' }) => {
                 query += `&status=Approved`;
             } else if (status) {
                 query += `&status=${status}`;
+            }
+
+            if (filters.subscriptionStatus) {
+                query += `&subscriptionStatus=${filters.subscriptionStatus}`;
             }
 
             if (search) query += `&keyword=${search}`;
@@ -158,6 +166,17 @@ const MerchantList = ({ mode = 'admin' }) => {
                             <option value="Rejected">Rejected</option>
                         </select>
                     )}
+                    {mode !== 'public' && (
+                        <select className="form-select" onChange={e => {
+                            setPage(1);
+                            setFilters({ ...filters, subscriptionStatus: e.target.value });
+                        }}>
+                            <option value="">All Subscriptions</option>
+                            <option value="active">Active</option>
+                            <option value="expired">Expired</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    )}
                     <input
                         type="text"
                         className="form-control"
@@ -199,6 +218,21 @@ const MerchantList = ({ mode = 'admin' }) => {
                                             {merchant.plan === 'Premium' && <i className="fas fa-crown me-1 text-warning"></i>}
                                             {merchant.plan}
                                         </span>
+                                        {/* Expiry Indicator */}
+                                        {merchant.subscriptionExpiryDate && (
+                                            <div className="small text-muted mt-1" style={{ fontSize: '0.75rem' }}>
+                                                {(() => {
+                                                    const expiry = new Date(merchant.subscriptionExpiryDate);
+                                                    const today = new Date();
+                                                    const diffTime = expiry - today;
+                                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                                    if (diffDays < 0 || merchant.subscriptionStatus === 'expired') return <span className="text-danger fw-bold">Expired</span>;
+                                                    if (diffDays <= 7) return <span className="text-warning fw-bold">Expiring in {diffDays}d</span>;
+                                                    return <span>Active ({diffDays}d left)</span>;
+                                                })()}
+                                            </div>
+                                        )}
                                     </td>
                                     {mode !== 'public' && (
                                         <td>
@@ -292,6 +326,13 @@ const MerchantList = ({ mode = 'admin' }) => {
                                 <Col md={6}>
                                     <h6 className="text-secondary text-uppercase small fw-bold">Account Details</h6>
                                     <p className="mb-1"><strong>Plan:</strong> {selectedMerchant.plan}</p>
+                                    <p className="mb-1"><strong>Subscription:</strong>
+                                        {selectedMerchant.subscriptionExpiryDate ?
+                                            <span className="ms-1">
+                                                {new Date(selectedMerchant.subscriptionExpiryDate).toLocaleDateString()}
+                                                {new Date(selectedMerchant.subscriptionExpiryDate) < new Date() && <Badge bg="danger" className="ms-2">Expired</Badge>}
+                                            </span> : ' N/A'}
+                                    </p>
                                     {mode !== 'public' && <p className="mb-1"><strong>Status:</strong> <span className={`text-${selectedMerchant.status === 'Approved' ? 'success' : 'warning'}`}>{selectedMerchant.status}</span></p>}
                                     <p className="mb-0"><strong>Joined:</strong> {new Date(selectedMerchant.createdAt).toLocaleDateString()}</p>
                                 </Col>

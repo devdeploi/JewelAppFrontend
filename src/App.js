@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 import Login from './components/Login';
+import useAutoLogout from './hooks/useAutoLogout';
 import Dashboard from './components/Dashboard'; // Admin Dashboard
 import MerchantDashboard from './components/MerchantDashboard';
 import MerchantRegister from './components/MerchantRegister';
@@ -80,6 +81,9 @@ function App() {
     // Automatically login after register
     handleLogin('merchant', newMerchantData);
   };
+
+  useAutoLogout(handleLogout, 60000, !!userRole); // 1 minute
+
   return (
     <Router>
       <div className="app-container">

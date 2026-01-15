@@ -69,6 +69,9 @@ const Login = ({ onLogin, onRegisterClick }) => {
                         setMerchantLoginStep(2);
                     } else {
                         // Fallback if backend doesn't trigger OTP (should not happen with new logic)
+                        if (data.isGracePeriod) {
+                            alert(`Warning: Your subscription has expired. You have 1 day grace period to renew before your account is blocked.`);
+                        }
                         localStorage.setItem('user', JSON.stringify(data));
                         onLogin('merchant', data);
                     }
