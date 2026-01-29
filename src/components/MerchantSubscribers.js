@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Badge, Card, ProgressBar, Button, Modal } from 'react-bootstrap';
+import { Table, Badge, Card, ProgressBar, Button, Modal, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import axios from 'axios';
 import { APIURL, BASEURL, onError } from '../utils/Function';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
     const [subscribers, setSubscribers] = useState([]);
@@ -54,10 +56,11 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         }
     }, [merchantId, user.token]);
 
-    useEffect(() => {
-        fetchSubscribers();
-        fetchPendingPayments();
-    }, [fetchSubscribers, fetchPendingPayments]);
+    useEffect
+        (() => {
+            fetchSubscribers();
+            fetchPendingPayments();
+        }, [fetchSubscribers, fetchPendingPayments]);
 
     const handleApprove = (paymentId) => {
         setConfirmModal({
@@ -73,12 +76,29 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         setActionLoading(paymentId);
         closeConfirmModal();
         try {
-            // Find the user ID before approving to highlight them
+            // Find the payment object before approving to use for invoice
             const payment = pendingPayments.find(p => p._id === paymentId);
             const userIdToHighlight = payment?.user?._id;
 
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
             await axios.put(`${APIURL}/payments/offline/${paymentId}/approve`, {}, config);
+
+            // Show Success Modal
+            if (payment) {
+                // Construct a subscriber-like object for the invoice generator
+                const subscriberData = {
+                    user: payment.user,
+                    plan: payment.chitPlan // Map chitPlan to plan for consistency
+                };
+
+                setSuccessModal({
+                    show: true,
+                    title: 'Payment Approved!',
+                    message: `You have successfully approved the payment of ₹${payment.amount}.`,
+                    payment: { ...payment, status: 'Completed', type: 'Offline' },
+                    subscriber: subscriberData
+                });
+            }
 
             // Refresh Both Lists Immediately
             await fetchPendingPayments();
@@ -128,13 +148,383 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
     const [manualPaymentModal, setManualPaymentModal] = useState(false);
     const [selectedSubscriber, setSelectedSubscriber] = useState(null);
     const [manualForm, setManualForm] = useState({ amount: '', notes: '' });
+    // removed paymentSuccessData state as it is replaced by successModal
 
     const [submittingManual, setSubmittingManual] = useState(false);
+
+    // Unified Success Modal State
+    const [successModal, setSuccessModal] = useState({
+        show: false,
+        title: '',
+        message: '',
+        payment: null,
+        subscriber: null
+    });
 
     // History Details State
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [paymentHistory, setPaymentHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+
+    // Helper to fetch image and convert to base64
+    const fetchImageAsBase64 = async (url) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch (error) {
+            console.error("Error fetching image:", error);
+            return null;
+        }
+    };
+
+    // Helper to extract plan details safely
+    const getPlanDetails = (subscriber) => {
+        if (subscriber.plan) return subscriber.plan;
+        if (subscriber.chitPlan) return subscriber.chitPlan;
+        return { planName: 'Unknown Plan', durationMonths: 0, totalAmount: 0 };
+    };
+
+
+    // PDF Generation Logic
+    const generateInvoice = async (payment, subscriber) => {
+        const doc = new jsPDF();
+
+        // Settings
+        const primaryColor = [145, 82, 0]; // #915200
+        const lightBg = [255, 251, 240]; // #fffbf0
+
+        // 1. Load Logos
+        const aurumLogoUrl = `${window.location.origin}/images/AURUM.png`;
+        const safproLogoUrl = `${window.location.origin}/images/assests/Safpro-logo.png`;
+
+        const [aurumLogoBase64, safproLogoBase64] = await Promise.all([
+            fetchImageAsBase64(aurumLogoUrl),
+            fetchImageAsBase64(safproLogoUrl)
+        ]);
+
+        let shopLogoBase64 = null;
+        if (user.shopLogo) {
+            shopLogoBase64 = await fetchImageAsBase64(`${BASEURL}${user.shopLogo}`);
+        }
+
+        // 2. Header Section
+        // Background strip for header
+        doc.setFillColor(...lightBg);
+        doc.rect(0, 0, 210, 45, 'F');
+        doc.setDrawColor(...primaryColor);
+        doc.setLineWidth(1);
+        doc.line(0, 45, 210, 45);
+
+        // A. Left Logo (Aurum)
+        if (aurumLogoBase64) {
+            doc.addImage(aurumLogoBase64, 'PNG', 15, 10, 35, 25);
+        }
+
+        // B. Center Content (Business Name & Address)
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text(user.name.toUpperCase(), 105, 18, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.setFont('helvetica', 'normal');
+        const addressLines = doc.splitTextToSize(user.address || user.city || '', 80);
+        doc.text(addressLines, 105, 25, { align: 'center' });
+
+        let contactInfo = `Phone: ${user.phone}`;
+        if (user.email) contactInfo += ` | ${user.email}`;
+        // Calculate dynamic Y to reduce extra space between address and contact info
+        const contactY = 25 + (addressLines.length * 5) + 2;
+        doc.text(contactInfo, 105, contactY, { align: 'center' });
+
+        // C. Right Logo (Shop Logo)
+        if (shopLogoBase64) {
+            // Draw a circular frame if possible, for now just a square/rect is easier with addImage
+            // To make it look "premium", let's just add it.
+            doc.addImage(shopLogoBase64, 'PNG', 165, 10, 25, 25);
+        }
+
+        // 3. Document Title
+        const startY = 60;
+        doc.setFontSize(22);
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text("PAYMENT RECEIPT", 105, startY, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 105, startY + 8, { align: 'center' });
+
+        // 4. Client Info
+        const infoY = startY + 25;
+        doc.setFontSize(11);
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text("TO:", 15, infoY);
+
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(subscriber.user.name.toUpperCase(), 15, infoY + 7);
+
+        doc.setFontSize(10);
+        doc.setTextColor(80);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Phone: ${subscriber.user.phone}`, 15, infoY + 13);
+        if (subscriber.user.email) doc.text(subscriber.user.email, 15, infoY + 18);
+
+        // 5. Table Data
+        const planDetails = getPlanDetails(subscriber);
+        const tableColumn = ["Description", "Details", "Amount (INR)"];
+        const tableRows = [
+            ["Plan Name", planDetails.planName, ""],
+            ["Payment Mode", payment.type || "Offline", ""],
+            ["Payment Date", new Date(payment.paymentDate || payment.date || new Date()).toLocaleDateString(), ""],
+            ["Notes", payment.notes || "-", ""],
+        ];
+
+        if (payment.commissionAmount > 0) {
+            tableRows.push(["Platform Fee (Online)", "", `Rs. ${Number(payment.commissionAmount).toFixed(2)}`]);
+        }
+
+        const grandTotal = Number(payment.amount) + (Number(payment.commissionAmount) || 0);
+
+        tableRows.push(
+            [{ content: "TOTAL RECEIVED", styles: { fontStyle: 'bold', fillColor: lightBg } }, "", { content: `Rs. ${grandTotal.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: primaryColor, halign: 'right' } }]
+        );
+
+        // 6. Styled Table
+        autoTable(doc, {
+            startY: infoY + 30,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: {
+                fillColor: primaryColor,
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            styles: {
+                fontSize: 10,
+                cellPadding: 5,
+                lineColor: [220, 220, 220],
+                lineWidth: 0.1
+            },
+            columnStyles: {
+                0: { fontStyle: 'bold', cellWidth: 80 },
+                1: { cellWidth: 'auto' },
+                2: { fontStyle: 'bold', halign: 'right', cellWidth: 40 }
+            }
+        });
+
+        const finalY = doc.lastAutoTable.finalY + 20;
+
+        // 7. Footer
+        doc.setFontSize(12);
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text("Thank you!", 105, finalY, { align: 'center' });
+
+        doc.setFontSize(9);
+        doc.setTextColor(100);
+        doc.setFont('helvetica', 'normal');
+        doc.text("If you have any questions about this receipt, please contact the merchant.", 105, finalY + 7, { align: 'center' });
+
+        // Branding and Safpro Logo
+        const footerY = finalY + 25;
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text("Powered By", 105, footerY, { align: 'center' });
+
+        if (safproLogoBase64) {
+            doc.addImage(safproLogoBase64, 'PNG', 90, footerY + 2, 30, 15);
+        }
+
+        doc.save(`Receipt_${subscriber.user.name}_${new Date().getTime()}.pdf`);
+    };
+
+    const generateStatement = async (subscriber, history) => {
+        const doc = new jsPDF();
+
+        // Settings for Brand Consistency
+        const primaryColor = [145, 82, 0]; // #915200
+        const lightBg = [255, 251, 240]; // #fffbf0
+
+        // 1. Load Logos
+        const aurumLogoUrl = `${window.location.origin}/images/AURUM.png`;
+        const safproLogoUrl = `${window.location.origin}/images/assests/Safpro-logo.png`;
+
+        const [aurumLogoBase64, safproLogoBase64] = await Promise.all([
+            fetchImageAsBase64(aurumLogoUrl),
+            fetchImageAsBase64(safproLogoUrl)
+        ]);
+
+        let shopLogoBase64 = null;
+        if (user.shopLogo) {
+            shopLogoBase64 = await fetchImageAsBase64(`${BASEURL}${user.shopLogo}`);
+        }
+
+        // 2. Header Section
+        doc.setFillColor(...lightBg);
+        doc.rect(0, 0, 210, 45, 'F');
+        doc.setDrawColor(...primaryColor);
+        doc.setLineWidth(1);
+        doc.line(0, 45, 210, 45);
+
+        // A. Left Logo
+        if (aurumLogoBase64) {
+            doc.addImage(aurumLogoBase64, 'PNG', 15, 10, 35, 25);
+        }
+
+        // B. Center Content
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text(user.name.toUpperCase(), 105, 18, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.setFont('helvetica', 'normal');
+        const addressLines = doc.splitTextToSize(user.address || user.city || '', 80);
+        doc.text(addressLines, 105, 25, { align: 'center' });
+
+        let contactInfo = `Phone: ${user.phone}`;
+        if (user.email) contactInfo += ` | ${user.email}`;
+        // Calculate dynamic Y to reduce extra space between address and contact info
+        const contactY = 25 + (addressLines.length * 5) + 2;
+        doc.text(contactInfo, 105, contactY, { align: 'center' });
+
+        // C. Right Logo
+        if (shopLogoBase64) {
+            doc.addImage(shopLogoBase64, 'PNG', 165, 10, 25, 25);
+        }
+
+        // 3. Document Title
+        const startY = 60;
+        doc.setFontSize(22);
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text("STATEMENT OF ACCOUNT", 105, startY, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Generated On: ${new Date().toLocaleDateString()}`, 105, startY + 8, { align: 'center' });
+
+        // 4. Client Info
+        const infoY = startY + 25;
+        doc.setFontSize(11);
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text("BILL TO:", 15, infoY);
+
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(subscriber.user.name.toUpperCase(), 15, infoY + 7);
+
+        doc.setFontSize(10);
+        doc.setTextColor(80);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Phone: ${subscriber.user.phone}`, 15, infoY + 13);
+
+        // Plan Context Line
+        const planDetails = getPlanDetails(subscriber);
+        doc.setTextColor(0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Plan: ${planDetails.planName} (Total Value: Rs. ${Number(planDetails.totalAmount).toLocaleString()})`, 15, infoY + 25);
+
+        // 5. Transaction Table
+        let totalPaid = 0;
+        const tableColumn = ["Date", "Description", "Type", "Amount (INR)"];
+        const tableRows = [];
+
+        const sortedHistory = [...history].sort((a, b) => new Date(a.paymentDate) - new Date(b.paymentDate));
+
+        sortedHistory.forEach(pay => {
+            if (pay.status === 'Completed') {
+                totalPaid += Number(pay.amount);
+            }
+            tableRows.push([
+                new Date(pay.paymentDate || pay.createdAt).toLocaleDateString(),
+                pay.notes || "Installment Payment",
+                pay.type === 'offline' ? 'Offline' : 'Online',
+                `Rs. ${Number(pay.amount).toFixed(2)}`
+            ]);
+        });
+
+        const balanceDue = planDetails.totalAmount - totalPaid;
+
+        tableRows.push([
+            { content: "", colSpan: 2, styles: { fillColor: [255, 255, 255] } },
+            { content: "TOTAL PAID", styles: { fontStyle: 'bold', fillColor: lightBg } },
+            { content: `Rs. ${totalPaid.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: primaryColor, halign: 'right' } }
+        ]);
+
+        tableRows.push([
+            { content: "", colSpan: 2, styles: { fillColor: [255, 255, 255] } },
+            { content: "BALANCE", styles: { fontStyle: 'bold', fillColor: lightBg } },
+            { content: `Rs. ${balanceDue.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: balanceDue > 0 ? [220, 53, 69] : [25, 135, 84], halign: 'right' } }
+        ]);
+
+        autoTable(doc, {
+            startY: infoY + 35,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: {
+                fillColor: primaryColor,
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 9,
+                cellPadding: 2
+            },
+            styles: {
+                fontSize: 9,
+                cellPadding: 2,
+                lineColor: [80, 80, 80],
+                lineWidth: 0.1,
+                valign: 'middle'
+            },
+            columnStyles: {
+                0: { cellWidth: 25 },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 25 },
+                3: { fontStyle: 'bold', halign: 'right', cellWidth: 35 }
+            }
+        });
+
+        const finalY = doc.lastAutoTable.finalY + 20;
+
+        // 7. Footer
+        doc.setFontSize(12);
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.text("Thank you for your business!", 105, finalY, { align: 'center' });
+
+        // Branding and Safpro Logo
+        const footerY = finalY + 15;
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text("Powered By", 105, footerY, { align: 'center' });
+
+        if (safproLogoBase64) {
+            doc.addImage(safproLogoBase64, 'PNG', 90, footerY + 2, 30, 15);
+        }
+
+        // Bottom Branding
+        
+
+        doc.save(`Statement_${subscriber.user.name}.pdf`);
+    };
 
     const openHistoryModal = async (subscriber) => {
         setSelectedSubscriber(subscriber);
@@ -163,18 +553,37 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         setSubmittingManual(true);
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
-            await axios.post(`${APIURL}/payments/offline/record`, {
+            const payload = {
                 chitPlanId: selectedSubscriber.plan._id,
                 userId: selectedSubscriber.user._id,
                 amount: manualForm.amount,
                 notes: manualForm.notes,
                 date: new Date().toISOString()
-            }, config);
+            };
 
+            const { data } = await axios.post(`${APIURL}/payments/offline/record`, payload, config);
+
+            // Assuming data contains the payment object or we construct a temp one
+            const paymentData = data.payment || {
+                ...payload,
+                _id: data._id || 'TEMP-' + Date.now(), // Fallback if ID not returned
+                type: 'offline',
+                status: 'Completed' // Assumed since it's manual record
+            };
+
+            // Don't modify manualPaymentModal state here anymore
+            // Close manual modal and open success modal
             setManualPaymentModal(false);
-            alert("Payment recorded successfully");
 
-            // Refresh Data instead of reload
+            setSuccessModal({
+                show: true,
+                title: 'Payment Recorded!',
+                message: `You have successfully recorded a payment of ₹${paymentData.amount}.`,
+                payment: paymentData,
+                subscriber: selectedSubscriber
+            });
+
+            // Refresh Data in background
             fetchSubscribers();
             if (selectedSubscriber.user._id) {
                 setHighlightedUser(selectedSubscriber.user._id);
@@ -184,6 +593,8 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         } catch (error) {
             console.error("Manual payment failed", error);
             alert("Failed to record payment");
+            alert("Failed to record payment");
+            // Do not close modal on error so user can retry
         } finally {
             setSubmittingManual(false);
         }
@@ -595,9 +1006,9 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                         onClick={() => setManualPaymentModal(false)}
                         className="px-4"
                     >
-                        <i className="fas fa-times me-2"></i>
-                        Cancel
+                        <i className="fas fa-times me-2"></i>Cancel
                     </Button>
+
                     <Button
                         style={{ backgroundColor: '#915200', borderColor: '#915200' }}
                         onClick={submitManualPayment}
@@ -617,6 +1028,43 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                         )}
                     </Button>
                 </Modal.Footer>
+            </Modal>
+
+            {/* Unified Success Modal */}
+            <Modal show={successModal.show} onHide={() => setSuccessModal({ ...successModal, show: false })} centered>
+                <Modal.Body className="text-center p-5">
+                    <div className="mx-auto rounded-circle d-flex align-items-center justify-content-center mb-4"
+                        style={{ width: '80px', height: '80px', backgroundColor: '#fffbf0', color: '#915200', border: '2px solid #f3e9bd' }}>
+                        <i className="fas fa-check fa-3x"></i>
+                    </div>
+
+                    <h4 className="fw-bold mb-3" style={{ color: '#915200' }}>{successModal.title}</h4>
+                    <p className="text-muted mb-4">{successModal.message}</p>
+
+                    <div className="d-grid gap-3 col-10 mx-auto">
+                        <Button
+                            variant="outline-light"
+                            onClick={() => {
+                                generateInvoice(successModal.payment, successModal.subscriber);
+                                setSuccessModal({ ...successModal, show: false });
+                            }}
+                            className="fw-bold py-2"
+                            style={{ borderColor: '#915200', color: '#915200' }}
+                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#915200'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#915200'; }}
+                        >
+                            <i className="fas fa-file-invoice me-2"></i>Download Invoice
+                        </Button>
+
+                        <Button
+                            onClick={() => setSuccessModal({ ...successModal, show: false })}
+                            className="fw-bold py-2"
+                            style={{ backgroundColor: '#915200', borderColor: '#915200' }}
+                        >
+                            Close
+                        </Button>
+                    </div>
+                </Modal.Body>
             </Modal>
 
             {/* History Details Modal */}
@@ -701,9 +1149,22 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                 <div className="p-4" style={{ height: '70vh', overflowY: 'auto' }}>
                                     <div className="d-flex justify-content-between align-items-center mb-3">
                                         <h6 className="fw-bold mb-0" style={{ color: '#915200', letterSpacing: '1px', fontSize: '0.8rem' }}>PAYMENT HISTORY (A-Z)</h6>
-                                        <Badge bg="light" pill style={{ color: '#915200', borderColor: '#915200', borderWidth: '1px', borderStyle: 'solid' }}>
-                                            Total: {paymentHistory.length}
-                                        </Badge>
+                                        <div className="d-flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline-dark"
+                                                onClick={() => generateStatement(selectedSubscriber, paymentHistory)}
+                                                className="py-1 px-3 rounded-pill"
+                                                style={{ fontSize: '0.75rem', borderColor: '#915200', color: '#915200' }}
+                                                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#915200'; e.currentTarget.style.color = 'white'; }}
+                                                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#915200'; }}
+                                            >
+                                                <i className="fas fa-file-download me-1"></i><span className='fw-bold'>Download Statement</span>
+                                            </Button>
+                                            <Badge bg="light" pill style={{ color: '#915200', borderColor: '#915200', borderWidth: '1px', borderStyle: 'solid', display: 'flex', alignItems: 'center' }}>
+                                                Total: {paymentHistory.length}
+                                            </Badge>
+                                        </div>
                                     </div>
 
                                     {loadingHistory ? (
@@ -732,7 +1193,7 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                                         <th className="py-3" style={{ color: '#915200' }}>Amount</th>
                                                         <th className="py-3" style={{ color: '#915200' }}>Type</th>
                                                         <th className="py-3" style={{ color: '#915200' }}>Status</th>
-                                                        <th className="py-3 pe-3" style={{ color: '#915200' }}>Notes</th>
+                                                        <th className="py-3 pe-3" style={{ color: '#915200' }}>Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -744,6 +1205,11 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                                             </td>
                                                             <td className="py-2">
                                                                 <div className="fw-bold" style={{ color: '#915200' }}>₹{pay.amount}</div>
+                                                                {pay.commissionAmount > 0 && (
+                                                                    <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                                                                        + ₹{pay.commissionAmount} (Platform Fee)
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="py-2">
                                                                 {pay.type === 'offline' ?
@@ -754,6 +1220,9 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                                                         <i className="fas fa-globe me-1"></i>Online
                                                                     </Badge>
                                                                 }
+                                                                {pay.commissionAmount > 0 && (
+                                                                    <Badge bg="info" className="ms-1" style={{ fontSize: '0.6rem' }}>Fee Paid</Badge>
+                                                                )}
                                                             </td>
                                                             <td className="py-2">
                                                                 <Badge bg="transparent" className="border" style={{
@@ -764,8 +1233,23 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                                                     {pay.status}
                                                                 </Badge>
                                                             </td>
-                                                            <td className="py-2 text-muted pe-3" style={{ maxWidth: '200px' }}>
-                                                                {pay.notes ? <div className="text-truncate" title={pay.notes}>{pay.notes}</div> : <span className="text-muted">-</span>}
+                                                            <td className="py-2 pe-3">
+                                                                {pay.status === 'Completed' && (
+                                                                    <OverlayTrigger
+                                                                        placement="top"
+                                                                        overlay={<Tooltip>Download Receipt</Tooltip>}
+                                                                    >
+                                                                        <Button
+                                                                            variant="link"
+                                                                            size="sm"
+                                                                            onClick={() => generateInvoice(pay, selectedSubscriber)}
+                                                                            className="p-0 text-decoration-none"
+                                                                            style={{ color: '#915200' }}
+                                                                        >
+                                                                            <i className="fas fa-cloud-download-alt"></i>
+                                                                        </Button>
+                                                                    </OverlayTrigger>
+                                                                )}
                                                             </td>
                                                         </tr>
                                                     ))}

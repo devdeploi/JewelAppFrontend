@@ -150,10 +150,10 @@ const MerchantList = ({ mode = 'admin' }) => {
     return (
         <div className="custom-table-container">
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h4 className="text-secondary mb-0">
+                <h5 className="fw-semibold mb-0" style={{color:"#915200"}}>
                     <i className="fas fa-store me-2"></i>
                     Merchant Directory
-                </h4>
+                </h5>
                 <div className="d-flex gap-2">
                     {mode !== 'public' && (
                         <select className="form-select" onChange={e => {
@@ -262,9 +262,9 @@ const MerchantList = ({ mode = 'admin' }) => {
                                                         {/* <Button size="sm" variant="outline-dark" style={{ borderColor: '#915200', color: '#915200' }} onClick={() => triggerAction(merchant, 'Pending')}>Pending</Button> */}
                                                     </>
                                                 )}
-                                                <Button size="sm" variant="danger" className="text-white p-0 ms-2" onClick={() => triggerAction(merchant, 'Delete')}>
+                                                {/* <Button size="sm" variant="danger" className="text-white p-0 ms-2" onClick={() => triggerAction(merchant, 'Delete')}>
                                                     <i className="fas fa-trash"></i>
-                                                </Button>
+                                                </Button> */}
                                             </div>
                                         </td>
                                     )}

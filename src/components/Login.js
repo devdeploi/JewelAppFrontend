@@ -88,6 +88,7 @@ const Login = ({ onLogin, onRegisterClick }) => {
                 // If User login fails, try Merchant Login
                 if (err.response && (err.response.status === 401 || err.response.status === 404)) {
                     const { data } = await axios.post(`${APIURL}/merchants/login`, { email, password });
+                    console.log("merchant data", data);
 
                     if (data.otpSent) {
                         setMerchantLoginStep(2);
@@ -150,14 +151,14 @@ const Login = ({ onLogin, onRegisterClick }) => {
     const handleSendResetOtp = async (e) => {
         e.preventDefault();
         setResetError('');
-        if (resetEmail && resetEmail.includes('@')) {
+        if (resetEmail) {
             setIsLoading(true);
             try {
                 await axios.post(`${APIURL}/forgot-password`, { email: resetEmail });
                 setResetStep(2);
                 setResendTimer(60);
                 setResetError('');
-                setResetMessage(`OTP sent to ${resetEmail}`);
+                setResetMessage(`OTP sent to your registered email/phone`);
                 setTimeout(() => setResetMessage(''), 3000);
             } catch (err) {
                 setResetError(err.response?.data?.message || 'Error sending OTP');
@@ -165,7 +166,7 @@ const Login = ({ onLogin, onRegisterClick }) => {
                 setIsLoading(false);
             }
         } else {
-            setResetError('Please enter a valid email.');
+            setResetError('Please enter your email or phone.');
         }
     };
 
@@ -284,13 +285,13 @@ const Login = ({ onLogin, onRegisterClick }) => {
                                         <i className="fas fa-envelope-open-text fa-2x" style={{ color: '#915200' }}></i>
                                     </div>
                                     <p className="text-muted small px-3">
-                                        Enter your registered email address. We'll send you a One-Time Password (OTP) to reset your account.
+                                        Enter your registered email or phone. We'll send you a One-Time Password (OTP) to reset your account.
                                     </p>
                                 </div>
                                 <Form.Group className="mb-4">
                                     <Form.Control
-                                        type="email"
-                                        placeholder="Enter your registered email"
+                                        type="text"
+                                        placeholder="Enter email or phone"
                                         value={resetEmail}
                                         onChange={(e) => setResetEmail(e.target.value)}
                                         required
@@ -320,7 +321,7 @@ const Login = ({ onLogin, onRegisterClick }) => {
                         {resetStep === 2 && (
                             <Form onSubmit={handleVerifyResetOtp}>
                                 <p className="text-center fw-semibold mb-3" style={{ color: '#915200' }}>
-                                    Enter the verification code sent to {resetEmail}
+                                    Enter the verification code sent to your registered device
                                 </p>
                                 <div className="d-flex justify-content-center mb-4">
                                     <OtpInput

@@ -17,6 +17,25 @@ const ManageChits = () => {
     const loggedinuser = JSON.parse(localStorage.getItem('user'));
     const merchantId = loggedinuser._id;
 
+    // Custom Alert State
+    const [alertState, setAlertState] = useState({
+        show: false,
+        title: '',
+        message: '',
+        variant: 'success' // success, danger, warning
+    });
+
+    const showAlert = (message, variant = 'danger', title = 'Alert') => {
+        setAlertState({ show: true, message, variant, title });
+    };
+
+    // Confirmation Modal State
+    const [confirmState, setConfirmState] = useState({
+        show: false,
+        message: '',
+        onConfirm: null
+    });
+
     const getAuthConfig = useCallback(() => {
         const user = JSON.parse(localStorage.getItem('user'));
         return {
@@ -70,7 +89,7 @@ const ManageChits = () => {
 
         // Basic Validation
         if (!planData.planName || !planData.totalAmount || !planData.durationMonths) {
-            alert("Please fill required fields");
+            showAlert("Please fill required fields", "warning", "Missing Info");
             return;
         }
 
@@ -81,33 +100,43 @@ const ManageChits = () => {
                 // Update
                 const { data } = await axios.put(`${APIURL}/chit-plans/${currentChit._id}`, planData, config);
                 setMyChits(myChits.map(c => c._id === currentChit._id ? data : c));
+                showAlert("Plan updated successfully!", "success", "Success");
             } else {
                 // Create
                 const { data } = await axios.post(`${APIURL}/chit-plans`, planData, config);
                 setMyChits([...myChits, data]);
+                showAlert("New plan created successfully!", "success", "Success");
             }
             setShowModal(false);
         } catch (error) {
             console.error("Error saving chit plan", error);
-            alert("Failed to save plan. Please try again.");
+            showAlert("Failed to save plan. Please try again.", "danger", "Error");
         } finally {
             setProcessing(false);
         }
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this plan?")) {
-            setProcessing(true);
-            try {
-                const config = getAuthConfig();
-                await axios.delete(`${APIURL}/chit-plans/${id}`, config);
-                setMyChits(myChits.filter(c => c._id !== id));
-            } catch (error) {
-                console.error("Error deleting chit plan", error);
-                alert("Failed to delete plan.");
-            } finally {
-                setProcessing(false);
-            }
+    const handleDelete = (id) => {
+        setConfirmState({
+            show: true,
+            message: "Are you sure you want to delete this plan? This action cannot be undone.",
+            onConfirm: () => executeDelete(id)
+        });
+    };
+
+    const executeDelete = async (id) => {
+        setConfirmState({ ...confirmState, show: false });
+        setProcessing(true);
+        try {
+            const config = getAuthConfig();
+            await axios.delete(`${APIURL}/chit-plans/${id}`, config);
+            setMyChits(myChits.filter(c => c._id !== id));
+            showAlert("Plan deleted successfully.", "success", "Deleted");
+        } catch (error) {
+            console.error("Error deleting chit plan", error);
+            showAlert("Failed to delete plan.", "danger", "Error");
+        } finally {
+            setProcessing(false);
         }
     };
 
@@ -130,11 +159,13 @@ const ManageChits = () => {
     const currentCount = myChits.length;
 
     // Check KYC
-    // Check KYC
     // Strict check: Status must be verified AND critical fields must exist
     const isKycVerified =
-        merchantData?.bankDetails?.verificationStatus === 'verified' &&
-        merchantData?.bankDetails?.verifiedName;
+        merchantData?.bankDetails?.accountNumber &&
+        merchantData?.bankDetails?.ifscCode &&
+        merchantData?.bankDetails?.accountHolderName &&
+        merchantData?.legalName &&
+        merchantData?.panNumber;
 
     const canCreate = isKycVerified && (currentCount < planLimit); // Must be verified AND within limit
 
@@ -193,12 +224,12 @@ const ManageChits = () => {
                                 localStorage.setItem('user', JSON.stringify(user));
                             }
 
-                            alert("Upgrade Successful! You can now create unlimited plans.");
-                            window.location.reload(); // Reload to reflect changes
+                            showAlert("Upgrade Successful! You can now create unlimited plans.", "success", "Success");
+                            setTimeout(() => window.location.reload(), 2000); // Reload to reflect changes after a short delay
                         }
                     } catch (err) {
                         console.error(err);
-                        alert("Payment verification failed");
+                        showAlert("Payment verification failed", "danger", "Error");
                     }
                 },
                 prefill: {
@@ -213,7 +244,7 @@ const ManageChits = () => {
 
             const rzp1 = new Razorpay(options);
             rzp1.on('payment.failed', function (response) {
-                alert(response.error.description);
+                showAlert(response.error.description, "danger", "Payment Failed");
             });
             setTimeout(() => {
                 rzp1.open();
@@ -221,49 +252,51 @@ const ManageChits = () => {
 
         } catch (error) {
             console.error(error);
-            alert("Upgrade process failed");
+            showAlert("Upgrade process failed", "danger", "System Error");
         }
     };
 
     return (
         <div>
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h4 className="text-secondary mb-1"><i className="fas fa-coins me-2"></i>Manage Chit Plans</h4>
-                    <div className="d-flex align-items-center gap-2">
-                        <div
-                            className="text-uppercase badge fw-semibold px-3 py-2"
-                            style={{
-                                background: 'linear-gradient(135deg, #ebdc87 0%, #e2d183 100%)',
-                                color: '#915200',
-                                // borderRadius: '999px',
-                                letterSpacing: '0.5px',
-                                boxShadow: '0 4px 10px rgba(145, 82, 0, 0.25)',
-                                border: '1px solid rgba(145, 82, 0, 0.3)',
-                            }}
-                        >
-                            {userPlan} Plan <span className="small text-capitalize">({merchantData?.billingCycle || 'monthly'})</span>
-                        </div>
-                        <div className="d-flex flex-column ms-2">
+                <div className="d-flex align-items-center">
+                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                        style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #f3e9bd 0%, #ebdc87 100%)', color: '#915200' }}>
+                        <i className="fas fa-coins fa-lg"></i>
+                    </div>
+                    <div>
+                        <h5 style={{ color: '#915200' }} className="mb-0 fw-bold">Manage Chit Plans</h5>
+                        <div className="d-flex align-items-center flex-wrap gap-2 mt-1">
                             {merchantData?.subscriptionExpiryDate && (
                                 <small className="text-muted fw-bold" style={{ fontSize: '0.75rem' }}>
                                     Expires: {new Date(merchantData.subscriptionExpiryDate).toLocaleDateString()}
                                 </small>
                             )}
-                            {merchantData?.upcomingPlan && (
+                            <span
+                                className="text-uppercase badge fw-bold px-2 py-1"
+                                style={{
+                                    background: 'linear-gradient(135deg, #ebdc87 0%, #e2d183 100%)',
+                                    color: '#915200',
+                                    fontSize: '0.65rem',
+                                    letterSpacing: '0.5px',
+                                    border: '1px solid rgba(145, 82, 0, 0.2)',
+                                    borderRadius: '4px'
+                                }}
+                            >
+                                {userPlan} Plan
+                            </span>
+                            <small className="text-muted fw-semibold" style={{ fontSize: '0.75rem' }}>
+                                ({currentCount} / {planLimit} Chits)
+                            </small>
+                        </div>
+                        {merchantData?.upcomingPlan && (
+                            <div className="mt-1">
                                 <small className="text-info fw-bold" style={{ fontSize: '0.7rem' }}>
                                     <i className="fas fa-info-circle me-1"></i>
                                     {userPlan} active until expiry, then {merchantData.upcomingPlan}
                                 </small>
-                            )}
-                        </div>
-
-
-                        <small className="text-muted">
-                            ({currentCount} / {planLimit} Chits)
-                        </small>
-
-
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -283,7 +316,7 @@ const ManageChits = () => {
                             placement="left"
                             overlay={<Tooltip>
                                 {!isKycVerified
-                                    ? "KYC Pending! Please verify Bank details in Profile to create plans."
+                                    ? "KYC Pending! Please verify Bank details and update PAN info (Legal Name & PAN Number) in Profile to create plans."
                                     : (isPremium ? "Limit Reached! Maximum 6 plans allowed." : "Limit Reached! Upgrade to Premium to add more plans.")}
                             </Tooltip>}
                         >
@@ -477,6 +510,7 @@ const ManageChits = () => {
                     </Form>
                 </Modal.Body>
             </Modal>
+
             {/* Upgrade Confirmation Modal */}
             <Modal show={showUpgradeModal} onHide={() => setShowUpgradeModal(false)} centered>
                 <Modal.Header closeButton className="border-0 bg-warning bg-opacity-10">
@@ -522,9 +556,8 @@ const ManageChits = () => {
                 </Modal.Footer>
             </Modal>
 
-
             {/* Processing Overlay Modal */}
-            < Modal show={processing} centered backdrop="static" keyboard={false} size="sm" >
+            <Modal show={processing} centered backdrop="static" keyboard={false} size="sm">
                 <Modal.Body className="text-center p-4">
                     <div className="spinner-border mb-3" role="status" style={{ color: '#915200' }}>
                         <span className="visually-hidden">Loading...</span>
@@ -532,8 +565,93 @@ const ManageChits = () => {
                     <h5 className="fw-bold" style={{ color: '#915200' }}>Please Wait</h5>
                     <p className="text-muted mb-0 small">Processing request and sending notifications...</p>
                 </Modal.Body>
-            </Modal >
-        </div >
+            </Modal>
+
+            {/* Custom Alert Modal */}
+            <Modal
+                show={alertState.show}
+                onHide={() => setAlertState(prev => ({ ...prev, show: false }))}
+                centered
+                className="fade"
+                contentClassName="border-0 rounded-4 overflow-hidden shadow-lg"
+            >
+                <div className="p-0 position-relative">
+                    <div className="text-center p-4 pt-5">
+                        <div
+                            className={`mb-4 mx-auto rounded-circle d-flex align-items-center justify-content-center shadow-sm`}
+                            style={{
+                                width: '80px',
+                                height: '80px',
+                                background: alertState.variant === 'success' ? '#d1e7dd' : alertState.variant === 'danger' ? '#f8d7da' : '#FFF3CD'
+                            }}
+                        >
+                            <i
+                                className={`fas ${alertState.variant === 'success' ? 'fa-check' : alertState.variant === 'danger' ? 'fa-exclamation-triangle' : 'fa-info'} fa-3x`}
+                                style={{
+                                    color: alertState.variant === 'success' ? '#198754' : alertState.variant === 'danger' ? '#dc3545' : '#856404'
+                                }}
+                            ></i>
+                        </div>
+
+                        <h4 className="fw-bold mb-2" style={{ color: '#915200' }}>
+                            {alertState.title}
+                        </h4>
+                        <p className="text-muted fw-semibold px-4 mb-4">
+                            {alertState.message}
+                        </p>
+
+                        <button
+                            className="btn fw-bold rounded-pill px-5 py-2 text-white shadow-sm"
+                            style={{
+                                background: 'linear-gradient(90deg, #915200 0%, #a86400 100%)',
+                                border: 'none',
+                                transition: 'transform 0.2s'
+                            }}
+                            onClick={() => setAlertState(prev => ({ ...prev, show: false }))}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                        >
+                            Okay, Got it
+                        </button>
+                    </div>
+                    {/* Decorative bottom bar */}
+                    <div style={{ height: '6px', width: '100%', background: 'linear-gradient(90deg, #ebdc87 0%, #e2d183 100%)' }}></div>
+                </div>
+            </Modal>
+
+            {/* Confirmation Modal */}
+            <Modal
+                show={confirmState.show}
+                onHide={() => setConfirmState(prev => ({ ...prev, show: false }))}
+                centered
+                contentClassName="border-0 rounded-4 overflow-hidden shadow-lg"
+            >
+                <div className="p-4 pt-5 text-center">
+                    <div className="mb-4 mx-auto rounded-circle d-flex align-items-center justify-content-center bg-danger bg-opacity-10" style={{ width: '80px', height: '80px' }}>
+                        <i className="fas fa-trash-alt fa-3x text-danger"></i>
+                    </div>
+                    <h4 className="fw-bold mb-2" style={{ color: '#915200' }}>Are you sure?</h4>
+                    <p className="text-muted fw-semibold px-4 mb-4">{confirmState.message}</p>
+                    <div className="d-flex gap-3 justify-content-center mb-2">
+                        <Button
+                            variant="light"
+                            className="rounded-pill px-4 fw-bold text-muted"
+                            onClick={() => setConfirmState(prev => ({ ...prev, show: false }))}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="danger"
+                            className="rounded-pill px-4 fw-bold"
+                            onClick={confirmState.onConfirm}
+                        >
+                            Yes, Delete It
+                        </Button>
+                    </div>
+                </div>
+                <div style={{ height: '6px', width: '100%', background: 'linear-gradient(90deg, #dc3545 0%, #f8d7da 100%)' }}></div>
+            </Modal>
+        </div>
     );
 };
 

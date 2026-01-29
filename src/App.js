@@ -82,7 +82,10 @@ function App() {
     handleLogin('merchant', newMerchantData);
   };
 
-  useAutoLogout(handleLogout, 5 * 60 * 1000, !!userRole); // 5 minutes
+  console.log("current user", currentUser);
+  
+
+  useAutoLogout(handleLogout, 10 * 60 * 1000, !!userRole); // 5 minutes
 
   return (
     <Router>

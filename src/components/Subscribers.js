@@ -185,12 +185,12 @@ const Subscribers = () => {
 
     return (
         <div className="animate__animated animate__fadeIn">
-            <h4 className="mb-4 text-secondary d-flex align-items-center justify-content-between">
+            <h5 style={{color:"#915200"}} className="mb-4 d-flex align-items-center fw-semibold justify-content-between">
                 <span><i className="fas fa-chart-pie me-2"></i>Subscription Analytics</span>
                 {/* <Badge bg="light" text="dark" className="fw-normal border">
                     <i className="fas fa-calendar-alt me-2 text-muted"></i> This Month
                 </Badge> */}
-            </h4>
+            </h5>
 
             {/* Top Revenue & Big Stats */}
             <Row className="g-4 mb-4">

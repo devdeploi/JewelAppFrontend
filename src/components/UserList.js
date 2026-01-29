@@ -102,10 +102,10 @@ const UserList = () => {
 
     return (
         <div className="custom-table-container">
-            <h4 className="mb-4 text-secondary">
+            <h5 className="mb-4 fw-semibold" style={{color:"#915200"}}>
                 <i className="fas fa-users me-2"></i>
                 User Management
-            </h4>
+            </h5>
 
             {usersList.length > 0 ? (
                 <>
@@ -115,7 +115,7 @@ const UserList = () => {
                                 <th>#</th>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Role</th>
+                                {/* <th>Role</th> */}
                                 <th>Joined</th>
                                 <th>Action</th>
                             </tr>
@@ -128,13 +128,13 @@ const UserList = () => {
                                     style={{ cursor: 'pointer' }}
                                 >
                                     <td>{(page - 1) * 10 + index + 1}</td>
-                                    <td className="fw-bold">{user.name}</td>
+                                    <td className="fw-bold" style={{color:"#915200"}}>{user.name}</td>
                                     <td>{user.email}</td>
-                                    <td>
+                                    {/* <td>
                                         <Badge bg={user.role === 'admin' ? 'danger' : user.role === 'merchant' ? 'warning' : 'info'}>
                                             {user.role}
                                         </Badge>
-                                    </td>
+                                    </td> */}
                                     <td>{new Date(user.createdAt).toLocaleDateString()}</td>
                                     <td>
                                         <Button size="sm" variant="danger" className="text-white p-0 ms-2" onClick={(e) => handleDeleteClick(e, user)}

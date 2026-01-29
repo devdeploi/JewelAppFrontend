@@ -27,10 +27,7 @@ const MerchantProfile = ({ merchantData }) => {
     };
 
     // Verification States
-    const [verifyingBank, setVerifyingBank] = useState(false);
-
     // Derived states
-    const bankVerified = data.bankDetails?.verificationStatus === 'verified';
 
     // Fetch fresh data on mount
     useEffect(() => {
@@ -50,64 +47,29 @@ const MerchantProfile = ({ merchantData }) => {
 
 
     const handleChange = (e) => {
-        setData({ ...data, [e.target.name]: e.target.value });
+        let value = e.target.value;
+        if (e.target.name === 'panNumber' || e.target.name === 'gstin') {
+            value = value.toUpperCase();
+        }
+        setData({ ...data, [e.target.name]: value });
     };
 
     const handleBankChange = (e) => {
-        const { name, value } = e.target;
-        // Reset verification on change
-        if (['accountNumber', 'ifscCode'].includes(name)) {
-            setData(prev => ({
-                ...prev,
-                bankDetails: {
-                    ...prev.bankDetails,
-                    [name]: value,
-                    verificationStatus: 'pending',
-                    verifiedName: ''
-                }
-            }));
-        } else {
-            setData({
-                ...data,
-                bankDetails: {
-                    ...data.bankDetails,
-                    [e.target.name]: e.target.value
-                }
-            });
+        let value = e.target.value;
+        if (e.target.name === 'ifscCode') {
+            value = value.toUpperCase();
         }
-    };
-
-
-
-    const verifyBankAccount = async () => {
-        const { accountNumber, ifscCode, accountHolderName } = data.bankDetails || {};
-        if (!accountNumber || !ifscCode) return showAlert("Please enter Account Number and IFSC", "warning", "Missing Details");
-
-        setVerifyingBank(true);
-        try {
-            const { data: resData } = await axios.post(`${APIURL}/kyc/verify-bank`, { accountNumber, ifscCode, accountHolderName });
-            if (resData.status === 'success') {
-                setData(prev => ({
-                    ...prev,
-                    bankDetails: {
-                        ...prev.bankDetails,
-                        verifiedName: resData.data.verifiedName,
-                        bankName: resData.data.bankName,
-                        branchName: resData.data.branchName,
-                        verificationStatus: 'verified'
-                    }
-                }));
-                // Save immediately? or wait for user to click Save?
-                // Better to let user click save, but feedback is immediate.
-            } else {
-                showAlert("Bank Verification Failed", "danger", "Verification Error");
+        setData({
+            ...data,
+            bankDetails: {
+                ...data.bankDetails,
+                [e.target.name]: value
             }
-        } catch (error) {
-            console.error(error);
-            showAlert(error.response?.data?.message || "Bank Verification Failed", "danger", "Verification Error");
-        }
-        setVerifyingBank(false);
+        });
     };
+
+
+
 
     const uploadAddressProofHandler = async (e) => {
         const file = e.target.files[0];
@@ -134,6 +96,35 @@ const MerchantProfile = ({ merchantData }) => {
         setData(prev => ({
             ...prev,
             addressProof: ''
+        }));
+    };
+
+    const uploadShopLogoHandler = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('image', file);
+
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            const config = { headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${user?.token}` } };
+            const { data: imagePath } = await axios.post(`${APIURL}/upload`, formData, config);
+
+            setData(prev => ({
+                ...prev,
+                shopLogo: imagePath
+            }));
+            showAlert("Shop Logo uploaded successfully", "success", "Success");
+        } catch (error) {
+            console.error(error);
+            showAlert('Shop Logo upload failed', "danger", "Upload Error");
+        }
+    };
+
+    const removeShopLogoHandler = () => {
+        setData(prev => ({
+            ...prev,
+            shopLogo: ''
         }));
     };
 
@@ -172,6 +163,14 @@ const MerchantProfile = ({ merchantData }) => {
 
     const handleSave = async (e) => {
         if (e) e.preventDefault();
+
+        // PAN Validation
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+        if (data.panNumber && !panRegex.test(data.panNumber.toUpperCase())) {
+            showAlert("Invalid PAN Format. Example: ABCDE1234F", "warning", "Validation Error");
+            return;
+        }
+
         try {
             const user = JSON.parse(localStorage.getItem('user'));
             const config = {
@@ -480,426 +479,530 @@ const MerchantProfile = ({ merchantData }) => {
                     </div>
                 </div>
             </div>
-            <Card.Body className="p-4">
+            <Card.Body className="p-0">
                 <Form id="profile-form" onSubmit={handleSave}>
-                    <Row className="g-3">
-                        <Col md={4}>
-                            <Form.Group>
-                                <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Business Name</Form.Label>
-                                <Form.Control
-                                    name="name"
-                                    value={data.name}
-                                    onChange={handleChange}
-                                    disabled={!isEditing}
-                                    className={`rounded-3 ${!isEditing ? "" : "bg-white shadow-sm"} fw-bold`}
-                                    style={{
-                                        transition: 'all 0.3s ease',
-                                        border: isEditing ? '1px solid #915200' : '1px solid transparent',
-                                        // color: '#915200'
-                                    }}
-                                />
-                            </Form.Group>
-                        </Col>
-                        <Col md={4}>
-                            <Form.Group>
-                                <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Email Address</Form.Label>
-                                <Form.Control
-                                    name="email"
-                                    value={data.email}
-                                    onChange={handleChange}
-                                    disabled={true} /* Email usually immutable */
-                                    className="fw-bold"
-                                />
-                            </Form.Group>
-                        </Col>
-                        <Col md={4}>
-                            <Form.Group>
-                                <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Contact Phone</Form.Label>
-                                <Form.Control
-                                    name="phone"
-                                    value={data.phone}
-                                    onChange={handleChange}
-                                    disabled
-                                    className='fw-bold'
-                                />
-                            </Form.Group>
-                        </Col>
-                        <Col md={12}>
-                            <Form.Group>
-                                <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Business Address</Form.Label>
-                                <Form.Control
-                                    as="textarea"
-                                    rows={3}
-                                    name="address"
-                                    value={data.address}
-                                    onChange={handleChange}
-                                    disabled={!isEditing}
-                                    className={`rounded-3 ${!isEditing ? "" : "bg-white shadow-sm"} fw-bold`}
-                                    style={{
-                                        transition: 'all 0.3s ease',
-                                        border: isEditing ? '1px solid #915200' : '1px solid transparent',
-                                        // color: '#915200'
-                                    }}
-                                />
-                            </Form.Group>
-                        </Col>
-                        <Col md={12}>
-                            <div className="d-flex align-items-center my-3">
-                                <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
-                                <span className="mx-3 small fw-bold uppercase" style={{ color: '#915200', letterSpacing: '1px' }}>
-                                    Bank Details (Payouts)
-                                </span>
-                                <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
-                            </div>
-                        </Col>
-                        {/* Payout Details Section */}
-                        <Col md={12}>
-                            <Card className="border-0 bg-light p-3">
-                                {data.bankDetails?.verifiedName && (
-                                    <div className="mb-3 text-success small fw-bold">
-                                        <i className="fas fa-check-circle me-1"></i> Verified Name: {data.bankDetails.verifiedName}
-                                        <span className="text-secondary ms-2">({data.bankDetails.bankName || ''} - {data.bankDetails.branchName || ''})</span>
-                                    </div>
-                                )}
-                                <Row className="g-2">
-                                    <Col md={4}>
-                                        <Form.Group>
-                                            <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Account Holder Name</Form.Label>
-                                            <Form.Control
-                                                name="accountHolderName" // Changed from accountName to accountHolderName to match schema
-                                                value={data.bankDetails?.accountHolderName || ''}
-                                                onChange={handleBankChange}
-                                                disabled={!isEditing}
-                                                placeholder='Enter Account Holder Name'
-                                                // size="sm"
-                                                className="fw-bold"
-                                            />
-                                        </Form.Group>
-                                    </Col>
-                                    <Col md={3}>
-                                        <Form.Group>
-                                            <Form.Label
-                                                className="small fw-bold text-uppercase"
-                                                style={{ color: '#915200' }}
-                                            >
-                                                Account Number
-                                            </Form.Label>
-
-                                            <Form.Control
-                                                name="accountNumber"
-                                                value={
-                                                    isEditing
-                                                        ? data.bankDetails?.accountNumber || ''
-                                                        : maskAccountNumber(data.bankDetails?.accountNumber)
-                                                }
-                                                onChange={(e) => {
-                                                    let value = e.target.value.replace(/\D/g, ''); // digits only
-
-                                                    handleBankChange({
-                                                        target: {
-                                                            name: 'accountNumber',
-                                                            value
-                                                        }
-                                                    });
-                                                }}
-                                                disabled={!isEditing}
-                                                inputMode="numeric"
-                                                pattern="[0-9]*"
-                                                placeholder="Enter account number"
-                                                className="fw-bold"
-                                            />
-                                        </Form.Group>
-                                    </Col>
-
-                                    <Col md={3}>
-                                        <Form.Group>
-                                            <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>IFSC Code</Form.Label>
-                                            <Form.Control
-                                                name="ifscCode"
-                                                value={isEditing ? data.bankDetails?.ifscCode || '' : maskIFSC(data.bankDetails?.ifscCode)}
-                                                onChange={handleBankChange}
-                                                disabled={!isEditing}
-                                                placeholder='Enter IFSC code'
-                                                // size="sm"
-                                                className="fw-bold"
-                                            />
-                                        </Form.Group>
-                                    </Col>
-                                    <Col md={2} className="d-flex align-items-end">
-                                        {isEditing && (
-                                            <Button
-                                                variant="light"
-                                                // size="sm"
-                                                className="w-100 fw-bold"
-                                                style={{ borderColor: '#915200', color: '#e2d183', backgroundColor: '#915200' }}
-                                                onClick={verifyBankAccount}
-                                                disabled={verifyingBank || bankVerified}
-                                            >
-                                                {verifyingBank ? <Spinner size="sm" animation="border" /> : bankVerified ? "Verified" : "Verify Bank"}
-                                            </Button>
-                                        )}
-                                        {!isEditing && bankVerified && <Badge bg="success" className="mb-2">Verified</Badge>}
-                                    </Col>
-                                </Row>
-                            </Card>
-                        </Col>
-                        {/* PAN Details Section - New */}
-                        <Col md={12}>
-                            <div className="d-flex align-items-center my-3">
-                                <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
-                                <span className="mx-3 small fw-bold uppercase" style={{ color: '#915200', letterSpacing: '1px' }}>
-                                    GSTIN Details
-                                </span>
-                                <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
-                            </div>
-                        </Col>
-                        <Col md={12}>
-                            <Card className="border-0 bg-light p-3">
-                                <Row className="g-2">
-                                    <Col md={6}>
-                                        <Form.Group>
-                                            <Form.Label
-                                                className="small fw-bold text-uppercase"
-                                                style={{ color: '#915200' }}
-                                            >
-                                                GSTIN Number
-                                            </Form.Label>
-
-                                            <Form.Control
-                                                name="gstin"
-                                                value={data.gstin || ''}
-                                                onChange={handleChange}
-                                                disabled={!isEditing}
-                                                placeholder="Enter GSTIN"
-                                                className="fw-bold"
-                                            />
-                                        </Form.Group>
-                                    </Col>
-
-                                    <Col md={12}>
-                                        <Form.Group className="mb-3">
-                                            {/* Label */}
-                                            <Form.Label
-                                                className="small fw-bold text-uppercase"
-                                                style={{ color: '#915200' }}
-                                            >
-                                                Address Proof
-                                            </Form.Label>
-
-                                            {/* Image / Upload Section */}
-                                            <div className="mt-2">
-                                                {data.addressProof ? (
-                                                    <div className="position-relative d-inline-block">
-                                                        <img
-                                                            src={`${APIURL.replace('/api', '')}${data.addressProof}`}
-                                                            alt="Address Proof"
-                                                            className="img-fluid rounded border shadow-sm"
-                                                            style={{ height: '120px', objectFit: 'cover' }}
-                                                        />
-
-                                                        {isEditing && (
-                                                            <Button
-                                                                type="button"
-                                                                variant="danger"
-                                                                size="sm"
-                                                                className="position-absolute top-0 end-0 rounded-circle shadow-sm d-flex align-items-center justify-content-center"
-                                                                style={{
-                                                                    width: '24px',
-                                                                    height: '24px',
-                                                                    padding: 0,
-                                                                    transform: 'translate(50%, -50%)',
-                                                                    border: '2px solid white'
-                                                                }}
-                                                                onClick={removeAddressProofHandler}
-                                                                title="Remove Address Proof"
-                                                            >
-                                                                <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        {/* NO IMAGE STATE */}
-                                                        <div
-                                                            className="small text-muted fw-semibold mb-2"
-                                                            style={{ fontStyle: 'italic' }}
-                                                        >
-                                                            No Address Proof uploaded
-                                                        </div>
-
-                                                        {/* UPLOAD ONLY IN EDIT MODE */}
-                                                        {isEditing && (
-                                                            <Form.Control
-                                                                type="file"
-                                                                size="sm"
-                                                                accept="image/*"
-                                                                onChange={uploadAddressProofHandler}
-                                                                className="fw-bold"
-                                                            />
-                                                        )}
-                                                    </>
-                                                )}
-                                            </div>
-
-                                        </Form.Group>
-                                    </Col>
-
-                                </Row>
-                            </Card>
-                        </Col>
-
-                        <Col md={12}>
-                            <h6 className="mt-3 fw-bold" style={{ color: '#915200' }}>Shop Images</h6>
-                            <div className="d-flex flex-wrap gap-2 mb-2">
-                                {data.shopImages && data.shopImages.length > 0 ? (
-                                    data.shopImages.map((img, idx) => (
-                                        <div key={idx} className="position-relative">
+                    <div className="p-4 border-bottom bg-light">
+                        <Row className="align-items-center">
+                            <Col md={3} className="text-center mb-3 mb-md-0">
+                                <div className="position-relative d-inline-block">
+                                    <div
+                                        className="rounded-circle overflow-hidden shadow-sm border"
+                                        style={{
+                                            width: '120px',
+                                            height: '120px',
+                                            backgroundColor: '#f8f9fa',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                    >
+                                        {data.shopLogo ? (
                                             <img
-                                                src={`${APIURL.replace('/api', '')}${img}`}
-                                                alt="Shop"
-                                                style={{
-                                                    width: 100,
-                                                    height: 100,
-                                                    objectFit: 'cover',
-                                                    borderRadius: 8,
-                                                    border: '1px solid #ddd'
-                                                }}
+                                                src={`${APIURL.replace('/api', '')}${data.shopLogo}`}
+                                                alt="Shop Logo"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                             />
-
-                                            {isEditing && (
+                                        ) : (
+                                            <i className="fas fa-store fa-3x" style={{ color: '#e2d183' }}></i>
+                                        )}
+                                    </div>
+                                    {isEditing && (
+                                        <div className="position-absolute bottom-0 end-0">
+                                            {data.shopLogo ? (
                                                 <Button
-                                                    type="button"
                                                     variant="danger"
                                                     size="sm"
-                                                    className="position-absolute top-0 end-0 rounded-circle shadow-sm d-flex align-items-center justify-content-center"
-                                                    style={{
-                                                        width: '24px',
-                                                        height: '24px',
-                                                        padding: 0,
-                                                        transform: 'translate(50%, -50%)',
-                                                        border: '2px solid white'
-                                                    }}
-                                                    onClick={() => {
-                                                        const newImages = data.shopImages.filter((_, i) => i !== idx);
-                                                        setData({ ...data, shopImages: newImages });
-                                                    }}
+                                                    className="rounded-circle shadow-sm p-0 d-flex align-items-center justify-content-center"
+                                                    style={{ width: '32px', height: '32px' }}
+                                                    onClick={removeShopLogoHandler}
                                                 >
-                                                    <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
+                                                    <i className="fas fa-trash-alt small"></i>
                                                 </Button>
+                                            ) : (
+                                                <label
+                                                    className="btn btn-warning btn-sm rounded-circle shadow-sm m-0 p-0 d-flex align-items-center justify-content-center"
+                                                    style={{ width: '32px', height: '32px', backgroundColor: '#e2d183', borderColor: '#e2d183' }}
+                                                >
+                                                    <i className="fas fa-camera small text-dark"></i>
+                                                    <input
+                                                        type="file"
+                                                        hidden
+                                                        accept="image/*"
+                                                        onChange={uploadShopLogoHandler}
+                                                    />
+                                                </label>
                                             )}
                                         </div>
-                                    ))
-                                ) : (
-                                    <div
-                                        className="small text-muted fw-semibold"
-                                        style={{ fontStyle: 'italic' }}
-                                    >
-                                        No shop images uploaded yet
+                                    )}
+                                </div>
+                                <div className="mt-2 small fw-bold text-uppercase" style={{ color: '#915200' }}>Shop Logo</div>
+                            </Col>
+                            <Col md={9}>
+                                <div className="ps-md-4">
+                                    <h3 className="fw-bold mb-1" style={{ color: '#915200' }}>{data.name}</h3>
+                                    <div className="d-flex align-items-center gap-2 mb-3">
+                                        <Badge bg="warning" text="dark" className="px-3 py-2 rounded-pill shadow-sm">
+                                            <i className="fas fa-crown me-1"></i> {data.plan || 'Standard'} Plan
+                                        </Badge>
+                                        <Badge bg={data.status === 'Approved' ? 'success' : 'secondary'} className="px-3 py-2 rounded-pill shadow-sm">
+                                            {data.status}
+                                        </Badge>
                                     </div>
-                                )}
-                            </div>
+                                    <Row className="g-3">
+                                        <Col sm={6}>
+                                            <div className="d-flex align-items-center gap-2 text-muted small">
+                                                <i className="fas fa-envelope text-warning"></i>
+                                                <span className="fw-semibold">{data.email}</span>
+                                            </div>
+                                        </Col>
+                                        <Col sm={6}>
+                                            <div className="d-flex align-items-center gap-2 text-muted small">
+                                                <i className="fas fa-phone text-warning"></i>
+                                                <span className="fw-semibold">{data.phone}</span>
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                </div>
+                            </Col>
+                        </Row>
+                    </div>
 
-                            {isEditing && (
-                                <>
-                                    {data.plan === 'Premium' ? (
-                                        <Form.Control
-                                            type="file"
-                                            onChange={uploadFileHandler}
-                                            accept="image/*"
-                                        />
+                    <div className="p-4 px-md-5">
+                        <Row className="g-3">
+                            <Col md={4}>
+                                <Form.Group>
+                                    <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Business Name</Form.Label>
+                                    <Form.Control
+                                        name="name"
+                                        value={data.name}
+                                        onChange={handleChange}
+                                        disabled={!isEditing}
+                                        className={`rounded-3 ${!isEditing ? "" : "bg-white shadow-sm"} fw-bold`}
+                                        style={{
+                                            transition: 'all 0.3s ease',
+                                            border: isEditing ? '1px solid #915200' : '1px solid transparent',
+                                            // color: '#915200'
+                                        }}
+                                    />
+                                </Form.Group>
+                            </Col>
+                            <Col md={4}>
+                                <Form.Group>
+                                    <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Email Address</Form.Label>
+                                    <Form.Control
+                                        name="email"
+                                        value={data.email}
+                                        onChange={handleChange}
+                                        disabled={true} /* Email usually immutable */
+                                        className="fw-bold"
+                                    />
+                                </Form.Group>
+                            </Col>
+                            <Col md={4}>
+                                <Form.Group>
+                                    <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Contact Phone</Form.Label>
+                                    <Form.Control
+                                        name="phone"
+                                        value={data.phone}
+                                        onChange={handleChange}
+                                        disabled
+                                        className='fw-bold'
+                                    />
+                                </Form.Group>
+                            </Col>
+                            <Col md={12}>
+                                <Form.Group>
+                                    <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Business Address</Form.Label>
+                                    <Form.Control
+                                        as="textarea"
+                                        rows={3}
+                                        name="address"
+                                        value={data.address}
+                                        onChange={handleChange}
+                                        disabled={!isEditing}
+                                        className={`rounded-3 ${!isEditing ? "" : "bg-white shadow-sm"} fw-bold`}
+                                        style={{
+                                            transition: 'all 0.3s ease',
+                                            border: isEditing ? '1px solid #915200' : '1px solid transparent',
+                                            // color: '#915200'
+                                        }}
+                                    />
+                                </Form.Group>
+                            </Col>
+                            <Col md={12}>
+                                <div className="d-flex align-items-center my-3">
+                                    <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
+                                    <span className="mx-3 small fw-bold uppercase" style={{ color: '#915200', letterSpacing: '1px' }}>
+                                        Bank Details (Payouts)
+                                    </span>
+                                    <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
+                                </div>
+                            </Col>
+                            {/* Payout Details Section */}
+                            <Col md={12}>
+                                <Card className="border-0 bg-light p-3">
+                                    <Row className="g-2">
+                                        <Col md={4}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>Account Holder Name</Form.Label>
+                                                <Form.Control
+                                                    name="accountHolderName" // Changed from accountName to accountHolderName to match schema
+                                                    value={data.bankDetails?.accountHolderName || ''}
+                                                    onChange={handleBankChange}
+                                                    disabled={!isEditing}
+                                                    placeholder='Enter Account Holder Name'
+                                                    // size="sm"
+                                                    className="fw-bold"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={3}>
+                                            <Form.Group>
+                                                <Form.Label
+                                                    className="small fw-bold text-uppercase"
+                                                    style={{ color: '#915200' }}
+                                                >
+                                                    Account Number
+                                                </Form.Label>
+
+                                                <Form.Control
+                                                    name="accountNumber"
+                                                    value={
+                                                        isEditing
+                                                            ? data.bankDetails?.accountNumber || ''
+                                                            : maskAccountNumber(data.bankDetails?.accountNumber)
+                                                    }
+                                                    onChange={(e) => {
+                                                        let value = e.target.value.replace(/\D/g, ''); // digits only
+
+                                                        handleBankChange({
+                                                            target: {
+                                                                name: 'accountNumber',
+                                                                value
+                                                            }
+                                                        });
+                                                    }}
+                                                    disabled={!isEditing}
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
+                                                    placeholder="Enter account number"
+                                                    className="fw-bold"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+
+                                        <Col md={3}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-bold uppercase" style={{ color: '#915200' }}>IFSC Code</Form.Label>
+                                                <Form.Control
+                                                    name="ifscCode"
+                                                    value={isEditing ? data.bankDetails?.ifscCode || '' : maskIFSC(data.bankDetails?.ifscCode)}
+                                                    onChange={handleBankChange}
+                                                    disabled={!isEditing}
+                                                    placeholder='Enter IFSC code'
+                                                    // size="sm"
+                                                    className="fw-bold"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={2} className="d-flex align-items-end">
+                                            {/* No verification needed */}
+                                        </Col>
+                                    </Row>
+                                </Card>
+                            </Col>
+                            {/* PAN Details Section - New */}
+                            <Col md={12}>
+                                <div className="d-flex align-items-center my-3">
+                                    <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
+                                    <span className="mx-3 small fw-bold uppercase" style={{ color: '#915200', letterSpacing: '1px' }}>
+                                        Business Details
+                                    </span>
+                                    <div style={{ height: '1px', flex: 1, backgroundColor: '#e2d183' }}></div>
+                                </div>
+                            </Col>
+                            <Col md={12}>
+                                <Card className="border-0 bg-light p-3">
+                                    <Row className="g-2">
+                                        <Col md={4}>
+                                            <Form.Group>
+                                                <Form.Label
+                                                    className="small fw-bold text-uppercase"
+                                                    style={{ color: '#915200' }}
+                                                >
+                                                    GSTIN Number
+                                                </Form.Label>
+                                                <Form.Control
+                                                    name="gstin"
+                                                    value={data.gstin || ''}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditing}
+                                                    placeholder="Enter GSTIN"
+                                                    className="fw-bold"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={4}>
+                                            <Form.Group>
+                                                <Form.Label
+                                                    className="small fw-bold text-uppercase"
+                                                    style={{ color: '#915200' }}
+                                                >
+                                                    Full legal name (as per PAN)
+                                                </Form.Label>
+                                                <Form.Control
+                                                    name="legalName"
+                                                    value={data.legalName || ''}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditing}
+                                                    placeholder="Enter Legal Name"
+                                                    className="fw-bold"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={4}>
+                                            <Form.Group>
+                                                <Form.Label
+                                                    className="small fw-bold text-uppercase"
+                                                    style={{ color: '#915200' }}
+                                                >
+                                                    PAN number (Individual or Business)
+                                                </Form.Label>
+                                                <Form.Control
+                                                    name="panNumber"
+                                                    value={data.panNumber || ''}
+                                                    onChange={handleChange}
+                                                    disabled={!isEditing}
+                                                    placeholder="Enter PAN Number"
+                                                    className="fw-bold"
+                                                />
+                                            </Form.Group>
+                                        </Col>
+
+                                        <Col md={12}>
+                                            <Form.Group className="mb-3">
+                                                {/* Label */}
+                                                <Form.Label
+                                                    className="small fw-bold text-uppercase"
+                                                    style={{ color: '#915200' }}
+                                                >
+                                                    Address Proof
+                                                </Form.Label>
+
+                                                {/* Image / Upload Section */}
+                                                <div className="mt-2">
+                                                    {data.addressProof ? (
+                                                        <div className="position-relative d-inline-block">
+                                                            <img
+                                                                src={`${APIURL.replace('/api', '')}${data.addressProof}`}
+                                                                alt="Address Proof"
+                                                                className="img-fluid rounded border shadow-sm"
+                                                                style={{ height: '120px', objectFit: 'cover' }}
+                                                            />
+
+                                                            {isEditing && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="danger"
+                                                                    size="sm"
+                                                                    className="position-absolute top-0 end-0 rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                                                                    style={{
+                                                                        width: '24px',
+                                                                        height: '24px',
+                                                                        padding: 0,
+                                                                        transform: 'translate(50%, -50%)',
+                                                                        border: '2px solid white'
+                                                                    }}
+                                                                    onClick={removeAddressProofHandler}
+                                                                    title="Remove Address Proof"
+                                                                >
+                                                                    <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {/* NO IMAGE STATE */}
+                                                            <div
+                                                                className="small text-muted fw-semibold mb-2"
+                                                                style={{ fontStyle: 'italic' }}
+                                                            >
+                                                                No Address Proof uploaded
+                                                            </div>
+
+                                                            {/* UPLOAD ONLY IN EDIT MODE */}
+                                                            {isEditing && (
+                                                                <Form.Control
+                                                                    type="file"
+                                                                    size="sm"
+                                                                    accept="image/*"
+                                                                    onChange={uploadAddressProofHandler}
+                                                                    className="fw-bold"
+                                                                />
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                            </Form.Group>
+                                        </Col>
+
+                                    </Row>
+                                </Card>
+                            </Col>
+
+                            <Col md={12}>
+                                <h6 className="mt-3 fw-bold" style={{ color: '#915200' }}>Shop Images</h6>
+                                <div className="d-flex flex-wrap gap-2 mb-2">
+                                    {data.shopImages && data.shopImages.length > 0 ? (
+                                        data.shopImages.map((img, idx) => (
+                                            <div key={idx} className="position-relative">
+                                                <img
+                                                    src={`${APIURL.replace('/api', '')}${img}`}
+                                                    alt="Shop"
+                                                    style={{
+                                                        width: 100,
+                                                        height: 100,
+                                                        objectFit: 'cover',
+                                                        borderRadius: 8,
+                                                        border: '1px solid #ddd'
+                                                    }}
+                                                />
+
+                                                {isEditing && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="danger"
+                                                        size="sm"
+                                                        className="position-absolute top-0 end-0 rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                                                        style={{
+                                                            width: '24px',
+                                                            height: '24px',
+                                                            padding: 0,
+                                                            transform: 'translate(50%, -50%)',
+                                                            border: '2px solid white'
+                                                        }}
+                                                        onClick={() => {
+                                                            const newImages = data.shopImages.filter((_, i) => i !== idx);
+                                                            setData({ ...data, shopImages: newImages });
+                                                        }}
+                                                    >
+                                                        <i className="fas fa-times" style={{ fontSize: '10px' }}></i>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        ))
                                     ) : (
                                         <div
-                                            className="p-4 rounded-3 text-center position-relative overflow-hidden"
-                                            style={{
-                                                border: '2px dashed #e2d183',
-                                                background: 'linear-gradient(135deg, rgba(255,249,196,0.3) 0%, rgba(255,255,255,0.4) 100%)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.3s ease'
-                                            }}
-                                            onClick={() => setShowUpgradeModal(true)}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,249,196,0.5)'}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,249,196,0.3) 0%, rgba(255,255,255,0.4) 100%)'}
+                                            className="small text-muted fw-semibold"
+                                            style={{ fontStyle: 'italic' }}
                                         >
-                                            <div className="position-relative z-1">
-                                                <div className="mb-2">
-                                                    <span className="badge bg-warning text-dark fw-bold shadow-sm px-3 py-2" style={{ letterSpacing: '0.5px' }}>
-                                                        <i className="fas fa-crown me-1 text-danger"></i> PREMIUM FEATURE
-                                                    </span>
-                                                </div>
-                                                <div className="mb-3 position-relative d-inline-block">
-                                                    <i className="fas fa-store fa-3x" style={{ color: '#e2d183' }}></i>
-                                                    <div className="position-absolute bottom-0 end-0 bg-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" style={{ width: '24px', height: '24px' }}>
-                                                        <i className="fas fa-lock small text-danger"></i>
-                                                    </div>
-                                                </div>
-
-                                                <h6 className="fw-bold mb-2" style={{ color: '#915200' }}>Shop Gallery is Locked</h6>
-                                                <p className="small text-muted mb-3 mx-auto" style={{ maxWidth: '250px' }}>
-                                                    Upgrade your plan to upload and showcase your shop interior & exterior images to build trust.
-                                                </p>
-
-                                                <Button
-                                                    size="sm"
-                                                    className="rounded-pill fw-bold px-4 text-white"
-                                                    style={{
-                                                        background: 'linear-gradient(90deg, #915200 0%, #a86400 100%)',
-                                                        border: 'none',
-                                                        boxShadow: '0 4px 10px rgba(145, 82, 0, 0.3)'
-                                                    }}
-                                                >
-                                                    Upgrade to Premium
-                                                </Button>
-                                            </div>
+                                            No shop images uploaded yet
                                         </div>
                                     )}
-                                </>
-                            )}
-                        </Col>
-
-                        <Col md={12}>
-                            <div
-                                className="p-4 rounded-4 mt-3 d-flex justify-content-between align-items-center position-relative overflow-hidden"
-                                style={{
-                                    background: data.plan === 'Premium'
-                                        ? 'linear-gradient(135deg, #FFF9C4 0%, #FFF 100%)'
-                                        : '#f8f9fa',
-                                    border: `1px solid ${data.plan === 'Premium' ? '#e2d183' : '#dee2e6'}`,
-                                    boxShadow: '0 4px 15px rgba(0,0,0,0.05)'
-                                }}
-                            >
-                                <div className="position-relative" style={{ zIndex: 1 }}>
-                                    <small className="d-block uppercase fw-bold mb-1" style={{ color: '#915200', letterSpacing: '1px' }}>
-                                        Current Plan Status
-                                    </small>
-                                    <div className="d-flex align-items-center">
-                                        <span className="display-6 fw-bold mb-0" style={{ color: '#915200' }}>
-                                            {data.plan || 'Standard'}
-                                        </span>
-                                        {data.plan === 'Premium' && (
-                                            <div className="ms-3 px-3 py-1 rounded-pill bg-warning bg-opacity-25 text-warning-emphasis fw-bold small border border-warning">
-                                                <i className="fas fa-crown me-1"></i> Active
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="small text-muted mt-2">
-                                        <i className="fas fa-calendar-alt me-1"></i>
-                                        <span className="fw-bold text-capitalize">{data.billingCycle || 'Monthly'}</span> Plan
-                                        {data.subscriptionExpiryDate && (
-                                            <span className="ms-2">
-                                                • Expires: {new Date(data.subscriptionExpiryDate).toLocaleDateString()}
-                                            </span>
-                                        )}
-                                        {data.upcomingPlan && (
-                                            <div className="text-info mt-1 fw-bold">
-                                                <i className="fas fa-info-circle me-1"></i>
-                                                {data.plan} active until expiry, then {data.upcomingPlan}
-                                            </div>
-                                        )}
-                                    </div>
                                 </div>
 
-                                <div className="d-flex align-items-center gap-2">
-                                    {/* {data.plan === 'Premium' && (
+                                {isEditing && (
+                                    <>
+                                        {data.plan === 'Premium' ? (
+                                            <Form.Control
+                                                type="file"
+                                                onChange={uploadFileHandler}
+                                                accept="image/*"
+                                            />
+                                        ) : (
+                                            <div
+                                                className="p-4 rounded-3 text-center position-relative overflow-hidden"
+                                                style={{
+                                                    border: '2px dashed #e2d183',
+                                                    background: 'linear-gradient(135deg, rgba(255,249,196,0.3) 0%, rgba(255,255,255,0.4) 100%)',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.3s ease'
+                                                }}
+                                                onClick={() => setShowUpgradeModal(true)}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,249,196,0.5)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,249,196,0.3) 0%, rgba(255,255,255,0.4) 100%)'}
+                                            >
+                                                <div className="position-relative z-1">
+                                                    <div className="mb-2">
+                                                        <span className="badge bg-warning text-dark fw-bold shadow-sm px-3 py-2" style={{ letterSpacing: '0.5px' }}>
+                                                            <i className="fas fa-crown me-1 text-danger"></i> PREMIUM FEATURE
+                                                        </span>
+                                                    </div>
+                                                    <div className="mb-3 position-relative d-inline-block">
+                                                        <i className="fas fa-store fa-3x" style={{ color: '#e2d183' }}></i>
+                                                        <div className="position-absolute bottom-0 end-0 bg-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" style={{ width: '24px', height: '24px' }}>
+                                                            <i className="fas fa-lock small text-danger"></i>
+                                                        </div>
+                                                    </div>
+
+                                                    <h6 className="fw-bold mb-2" style={{ color: '#915200' }}>Shop Gallery is Locked</h6>
+                                                    <p className="small text-muted mb-3 mx-auto" style={{ maxWidth: '250px' }}>
+                                                        Upgrade your plan to upload and showcase your shop interior & exterior images to build trust.
+                                                    </p>
+
+                                                    <Button
+                                                        size="sm"
+                                                        className="rounded-pill fw-bold px-4 text-white"
+                                                        style={{
+                                                            background: 'linear-gradient(90deg, #915200 0%, #a86400 100%)',
+                                                            border: 'none',
+                                                            boxShadow: '0 4px 10px rgba(145, 82, 0, 0.3)'
+                                                        }}
+                                                    >
+                                                        Upgrade to Premium
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </Col>
+
+                            <Col md={12}>
+                                <div
+                                    className="p-4 rounded-4 mt-3 d-flex justify-content-between align-items-center position-relative overflow-hidden"
+                                    style={{
+                                        background: data.plan === 'Premium'
+                                            ? 'linear-gradient(135deg, #FFF9C4 0%, #FFF 100%)'
+                                            : '#f8f9fa',
+                                        border: `1px solid ${data.plan === 'Premium' ? '#e2d183' : '#dee2e6'}`,
+                                        boxShadow: '0 4px 15px rgba(0,0,0,0.05)'
+                                    }}
+                                >
+                                    <div className="position-relative" style={{ zIndex: 1 }}>
+                                        <small className="d-block uppercase fw-bold mb-1" style={{ color: '#915200', letterSpacing: '1px' }}>
+                                            Current Plan Status
+                                        </small>
+                                        <div className="d-flex align-items-center">
+                                            <span className="display-6 fw-bold mb-0" style={{ color: '#915200' }}>
+                                                {data.plan || 'Standard'}
+                                            </span>
+                                            {data.plan === 'Premium' && (
+                                                <div className="ms-3 px-3 py-1 rounded-pill bg-warning bg-opacity-25 text-warning-emphasis fw-bold small border border-warning">
+                                                    <i className="fas fa-crown me-1"></i> Active
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="small text-muted mt-2">
+                                            <i className="fas fa-calendar-alt me-1"></i>
+                                            <span className="fw-bold text-capitalize">{data.billingCycle || 'Monthly'}</span> Plan
+                                            {data.subscriptionExpiryDate && (
+                                                <span className="ms-2">
+                                                    • Expires: {new Date(data.subscriptionExpiryDate).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                            {data.upcomingPlan && (
+                                                <div className="text-info mt-1 fw-bold">
+                                                    <i className="fas fa-info-circle me-1"></i>
+                                                    {data.plan} active until expiry, then {data.upcomingPlan}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="d-flex align-items-center gap-2">
+                                        {/* {data.plan === 'Premium' && (
                                         <Button
                                             variant="outline-secondary"
                                             className="fw-bold rounded-pill px-3"
@@ -908,13 +1011,13 @@ const MerchantProfile = ({ merchantData }) => {
                                             <i className="fas fa-arrow-down me-2"></i> Downgrade
                                         </Button>
                                     )} */}
-                                    {data.plan !== 'Premium' && (
-                                        <Button
-                                            onClick={() => setShowUpgradeModal(true)}
-                                            size="lg"
-                                            className="fw-bold text-white px-4 rounded-pill d-flex align-items-center gap-2 position-relative overflow-hidden"
-                                            style={{
-                                                background: `
+                                        {data.plan !== 'Premium' && (
+                                            <Button
+                                                onClick={() => setShowUpgradeModal(true)}
+                                                size="lg"
+                                                className="fw-bold text-white px-4 rounded-pill d-flex align-items-center gap-2 position-relative overflow-hidden"
+                                                style={{
+                                                    background: `
             linear-gradient(
                 145deg,
                 #915200 0%,
@@ -924,69 +1027,70 @@ const MerchantProfile = ({ merchantData }) => {
                 #915200 100%
             )
         `,
-                                                border: '1px solid rgba(145, 82, 0, 0.65)',
-                                                boxShadow: `
+                                                    border: '1px solid rgba(145, 82, 0, 0.65)',
+                                                    boxShadow: `
             0 10px 28px rgba(145, 82, 0, 0.45),
             inset 0 1px 1px rgba(255,255,255,0.35),
             inset 0 -2px 6px rgba(0,0,0,0.25)
         `,
-                                                transition: 'transform 0.25s ease',
-                                            }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                                            onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
-                                        >
-                                            {/* 🔁 Animated Glass Shine */}
-                                            <span
-                                                ref={(el) => {
-                                                    if (!el || el.dataset.animating) return;
-                                                    el.dataset.animating = 'true';
-
-                                                    setInterval(() => {
-                                                        el.style.transition = 'none';
-                                                        el.style.left = '-70%';
-
-                                                        requestAnimationFrame(() => {
-                                                            el.style.transition = 'left 0.55s ease-out';
-                                                            el.style.left = '120%';
-                                                        });
-                                                    }, 3000); // 🔥 shine every 600ms
+                                                    transition: 'transform 0.25s ease',
                                                 }}
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: '-60%',
-                                                    left: '-70%',
-                                                    width: '50%',
-                                                    height: '220%',
-                                                    background:
-                                                        'linear-gradient(120deg, rgba(255,255,255,0.45), rgba(255,255,255,0))',
-                                                    transform: 'rotate(25deg)',
-                                                    pointerEvents: 'none',
-                                                }}
-                                            />
+                                                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+                                            >
+                                                {/* 🔁 Animated Glass Shine */}
+                                                <span
+                                                    ref={(el) => {
+                                                        if (!el || el.dataset.animating) return;
+                                                        el.dataset.animating = 'true';
 
-                                            <i className="fas fa-crown"></i>
-                                            Upgrade to Premium
-                                            <i className="fas fa-arrow-right ms-1"></i>
-                                        </Button>
+                                                        setInterval(() => {
+                                                            el.style.transition = 'none';
+                                                            el.style.left = '-70%';
 
-                                    )}
+                                                            requestAnimationFrame(() => {
+                                                                el.style.transition = 'left 0.55s ease-out';
+                                                                el.style.left = '120%';
+                                                            });
+                                                        }, 3000); // 🔥 shine every 600ms
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '-60%',
+                                                        left: '-70%',
+                                                        width: '50%',
+                                                        height: '220%',
+                                                        background:
+                                                            'linear-gradient(120deg, rgba(255,255,255,0.45), rgba(255,255,255,0))',
+                                                        transform: 'rotate(25deg)',
+                                                        pointerEvents: 'none',
+                                                    }}
+                                                />
+
+                                                <i className="fas fa-crown"></i>
+                                                Upgrade to Premium
+                                                <i className="fas fa-arrow-right ms-1"></i>
+                                            </Button>
+
+                                        )}
+                                    </div>
+
+                                    {/* Background Watermark Icon */}
+                                    <i
+                                        className={`fas ${data.plan === 'Premium' ? 'fa-gem' : 'fa-certificate'} position-absolute`}
+                                        style={{
+                                            right: '-20px',
+                                            bottom: '-20px',
+                                            fontSize: '10rem',
+                                            opacity: 0.1,
+                                            color: '#915200',
+                                            zIndex: 0
+                                        }}
+                                    ></i>
                                 </div>
-
-                                {/* Background Watermark Icon */}
-                                <i
-                                    className={`fas ${data.plan === 'Premium' ? 'fa-gem' : 'fa-certificate'} position-absolute`}
-                                    style={{
-                                        right: '-20px',
-                                        bottom: '-20px',
-                                        fontSize: '10rem',
-                                        opacity: 0.1,
-                                        color: '#915200',
-                                        zIndex: 0
-                                    }}
-                                ></i>
-                            </div>
-                        </Col>
-                    </Row>
+                            </Col>
+                        </Row>
+                    </div>
                 </Form>
             </Card.Body>
 
