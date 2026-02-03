@@ -285,7 +285,7 @@ const LandingPage = () => {
                                     </div>
                                 </Card>
 
-                                <Card className="position-absolute border-0 shadow-lg p-2 p-lg-3 rounded-4 floating-badge-3"
+                                {/* <Card className="position-absolute border-0 shadow-lg p-2 p-lg-3 rounded-4 floating-badge-3"
                                     style={{
                                         animation: 'float 6s ease-in-out infinite 2s',
                                         background: 'rgba(255, 255, 255, 0.95)',
@@ -300,7 +300,7 @@ const LandingPage = () => {
                                             <small className="text-muted small-text">Happy Merchants</small>
                                         </div>
                                     </div>
-                                </Card>
+                                </Card> */}
                             </div>
                         </Col>
                     </Row>
