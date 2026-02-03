@@ -296,7 +296,7 @@ const LandingPage = () => {
                                             <i className="fas fa-users"></i>
                                         </div>
                                         <div className="text-start">
-                                            <strong style={{ color: brandColor }} className="d-block small-text">500+</strong>
+                                            <strong style={{ color: brandColor }} className="d-block small-text">50+</strong>
                                             <small className="text-muted small-text">Happy Merchants</small>
                                         </div>
                                     </div>
