@@ -1435,13 +1435,7 @@ const MerchantRegister = ({ onRegister, onSwitchToLogin }) => {
                                 </small>
                             </div>
 
-                            <div className="alert alert-danger border-danger border-2 d-flex align-items-center mb-3 py-2" role="alert">
-                                <i className="fas fa-exclamation-circle fa-lg me-2 text-danger"></i>
-                                <div>
-                                    <h6 className="fw-bold mb-1 text-danger" style={{ fontSize: '0.9rem' }}>Mandatory Requirement</h6>
-                                    <p className="mb-0 small text-dark" style={{ fontSize: '0.8rem' }}>Configuring a valid <strong>Razorpay</strong> account is <strong>MANDATORY</strong> before you can fully register and activate your Merchant account.</p>
-                                </div>
-                            </div>
+                            {/* Mandatory Requirement Alert Removed */}
 
                             <Button
                                 onClick={handlePaymentAndRegister}

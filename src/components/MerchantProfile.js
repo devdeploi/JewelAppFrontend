@@ -9,7 +9,7 @@ import { useRazorpay } from "react-razorpay";
 
 const MerchantProfile = ({ merchantData }) => {
     const { Razorpay } = useRazorpay();
-    const [data, setData] = useState(merchantData);
+    const [data, setData] = useState(merchantData || {});
     const [isEditing, setIsEditing] = useState(false);
     const [merchantUpgradeCycle, setMerchantUpgradeCycle] = useState('yearly');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -29,21 +29,12 @@ const MerchantProfile = ({ merchantData }) => {
     // Verification States
     // Derived states
 
-    // Fetch fresh data on mount
+    // Sync with prop when it changes
     useEffect(() => {
-        const fetchFreshData = async () => {
-            try {
-                const user = JSON.parse(localStorage.getItem('user'));
-                const config = { headers: { Authorization: `Bearer ${user?.token}` } };
-                const data = await axios.get(`${APIURL}/merchants/${merchantData._id}`, config);
-                console.log(data.data);
-                setData(data.data);
-            } catch (e) {
-                console.log("Could not fetch fresh data, using props");
-            }
-        };
-        fetchFreshData();
-    }, [merchantData._id]);
+        if (merchantData) {
+            setData(merchantData);
+        }
+    }, [merchantData]);
 
 
     const handleChange = (e) => {
@@ -396,6 +387,14 @@ const MerchantProfile = ({ merchantData }) => {
 
     console.log(data);
 
+
+    if (!data || !data._id) {
+        return (
+            <div className="text-center p-5">
+                <Spinner animation="border" variant="warning" />
+            </div>
+        );
+    }
 
     return (
         <Card className="border-0 shadow-sm rounded-4 overflow-hidden">

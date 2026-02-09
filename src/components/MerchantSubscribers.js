@@ -12,7 +12,10 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
     const [actionLoading, setActionLoading] = useState(null);
     const [highlightedUser, setHighlightedUser] = useState(null);
 
-    // Confirmation Modal State
+    // Search States
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
+
     const [confirmModal, setConfirmModal] = useState({
         show: false,
         title: '',
@@ -61,6 +64,71 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
             fetchSubscribers();
             fetchPendingPayments();
         }, [fetchSubscribers, fetchPendingPayments]);
+
+    // --- Settlement State ---
+    const [settlementModal, setSettlementModal] = useState({
+        show: false,
+        subscriber: null
+    });
+    const [settlementForm, setSettlementForm] = useState({
+        amount: '',
+        transactionId: '',
+        note: ''
+    });
+    const [submittingSettlement, setSubmittingSettlement] = useState(false);
+
+    const withdrawalRequests = React.useMemo(() => {
+        return subscribers.filter(s =>
+            s.subscription?.status === 'requested_withdrawal' &&
+            s.withdrawal?.request?.status === 'pending'
+        );
+    }, [subscribers]);
+
+
+
+
+    console.log(settlementModal);
+
+
+    // --- Date Search State (Premium) ---
+    const [searchDate, setSearchDate] = useState('');
+    const [dailyPayments, setDailyPayments] = useState(null);
+    const [searchingDate, setSearchingDate] = useState(false);
+    const [showDateSearch, setShowDateSearch] = useState(false);
+
+    const handleDateSearch = async () => {
+        if (!searchDate) return;
+        setSearchingDate(true);
+        try {
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            const { data } = await axios.get(`${APIURL}/payments/search/date?date=${searchDate}`, config);
+            setDailyPayments(data);
+        } catch (error) {
+            console.error("Date search failed", error);
+            if (error.response?.status === 403) {
+                alert("This feature is available only for Premium merchants.");
+            } else {
+                alert("Failed to fetch payments for this date.");
+            }
+        } finally {
+            setSearchingDate(false);
+        }
+    };
+
+    const clearDateSearch = () => {
+        setSearchDate('');
+        setDailyPayments(null);
+    };
+
+    const filteredSubscribers = React.useMemo(() => {
+        if (!searchQuery) return subscribers;
+        const lower = searchQuery.toLowerCase();
+        return subscribers.filter(sub =>
+            (sub.user?.name?.toLowerCase() || '').includes(lower) ||
+            (sub.user?.phone || '').includes(lower) ||
+            (sub.plan?.planName?.toLowerCase() || '').includes(lower)
+        );
+    }, [subscribers, searchQuery]);
 
     const handleApprove = (paymentId) => {
         setConfirmModal({
@@ -160,6 +228,19 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         payment: null,
         subscriber: null
     });
+
+    // Offline Payment Details Modal
+    const [offlineDetailsModal, setOfflineDetailsModal] = useState({
+        show: false,
+        payment: null
+    });
+
+    const viewOfflineDetails = (payment) => {
+        setOfflineDetailsModal({
+            show: true,
+            payment
+        });
+    };
 
     // History Details State
     const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -351,6 +432,128 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         doc.save(`Receipt_${subscriber.user.name}_${new Date().getTime()}.pdf`);
     };
 
+    const generateSettlementReceipt = async (subscriber, settlementData) => {
+        const doc = new jsPDF();
+
+        // Brand Colors
+        const primaryColor = [145, 82, 0];
+        const lightBg = [255, 251, 240];
+
+        // 1. Load Logos (reusing same logic)
+        const aurumLogoUrl = `${window.location.origin}/images/AURUM.png`;
+        const safproLogoUrl = `${window.location.origin}/images/assests/Safpro-logo.png`;
+
+        const [aurumLogoBase64, safproLogoBase64] = await Promise.all([
+            fetchImageAsBase64(aurumLogoUrl),
+            fetchImageAsBase64(safproLogoUrl)
+        ]);
+
+        let shopLogoBase64 = null;
+        if (user.shopLogo) {
+            shopLogoBase64 = await fetchImageAsBase64(`${BASEURL}${user.shopLogo}`);
+        }
+
+        // Header
+        doc.setFillColor(...lightBg);
+        doc.rect(0, 0, 210, 45, 'F');
+        doc.setDrawColor(...primaryColor);
+        doc.setLineWidth(1);
+        doc.line(0, 45, 210, 45);
+
+        if (aurumLogoBase64) doc.addImage(aurumLogoBase64, 'PNG', 15, 10, 35, 25);
+
+        doc.setTextColor(...primaryColor);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.text(user.name.toUpperCase(), 105, 18, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.setFont('helvetica', 'normal');
+        doc.text("SETTLEMENT RECEIPT", 105, 30, { align: 'center' });
+
+        // Add Date under Title to match Mobile
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`, 105, 35, { align: 'center' });
+
+
+        if (shopLogoBase64) doc.addImage(shopLogoBase64, 'PNG', 165, 10, 25, 25);
+
+        // Body
+        let y = 60;
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text(`To: ${subscriber.user.name.toUpperCase()}`, 15, y);
+        y += 7;
+        doc.text(`Plan: ${subscriber.plan.planName}`, 15, y);
+        y += 15;
+
+        // Table
+        autoTable(doc, {
+            startY: y,
+            head: [['Description', 'Details']],
+            body: [
+                ['Settlement Amount', `Rs. ${Number(settlementData.amount).toFixed(2)}`],
+                ['Transaction Ref', settlementData.transactionId],
+                ['Note', settlementData.note || '-']
+            ],
+            theme: 'grid',
+            headStyles: { fillColor: primaryColor }
+        });
+
+        const finalY = doc.lastAutoTable.finalY + 20;
+        doc.text("This amounts fully settles the chit plan.", 105, finalY, { align: 'center' });
+
+        if (safproLogoBase64) {
+            doc.addImage(safproLogoBase64, 'PNG', 90, finalY + 10, 30, 15);
+        }
+
+        doc.save(`Settlement_${subscriber.user.name}.pdf`);
+    };
+
+    const executeSettlement = async () => {
+        if (!settlementForm.amount || !settlementForm.transactionId) {
+            alert("Please enter amount and transaction ID.");
+            return;
+        }
+
+        setSubmittingSettlement(true);
+        try {
+            const config = { headers: { Authorization: `Bearer ${user.token}` } };
+            const planId = settlementModal.subscriber.plan._id;
+            const userId = settlementModal.subscriber.user._id;
+
+            await axios.post(`${APIURL}/chit-plans/${planId}/settle`, {
+                userId,
+                amount: settlementForm.amount,
+                transactionId: settlementForm.transactionId,
+                note: settlementForm.note
+            }, config);
+
+            // Close modal
+            const settledSub = settlementModal.subscriber;
+            const settlementData = { ...settlementForm };
+            setSettlementModal({ show: false, subscriber: null });
+
+            // Show success alert and offer receipt
+            // Since we don't have a complex alert system here, we just use standard confirm or alert
+            if (window.confirm("Settlement Successful! Click OK to download receipt.")) {
+                generateSettlementReceipt(settledSub, settlementData);
+            }
+
+            fetchSubscribers();
+        } catch (error) {
+            console.error(error);
+            alert("Failed to process settlement.");
+        } finally {
+            setSubmittingSettlement(false);
+        }
+    };
+
+
+
+
     const generateStatement = async (subscriber, history) => {
         const doc = new jsPDF();
 
@@ -474,6 +677,28 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
             { content: `Rs. ${balanceDue.toFixed(2)}`, styles: { fontStyle: 'bold', textColor: balanceDue > 0 ? [220, 53, 69] : [25, 135, 84], halign: 'right' } }
         ]);
 
+        // --- Add Settlement Details if Settled ---
+        if (subscriber.subscription.status === 'settled') {
+            // Add a visual separator or header for settlement
+            tableRows.push([
+                { content: "SETTLEMENT DETAILS", colSpan: 4, styles: { fontStyle: 'bold', fillColor: primaryColor, textColor: [255, 255, 255], halign: 'center' } }
+            ]);
+
+            const details = subscriber.subscription.settlementDetails || {};
+            // Using settlementDetails from updated backend controller
+            const settlementAmount = details.amount || totalPaid;
+            const settlementDate = details.settledDate ? new Date(details.settledDate).toLocaleDateString() : new Date().toLocaleDateString();
+            const settlementTxnId = details.transactionId || 'N/A';
+            const settlementNotes = details.note || 'Settled';
+
+            tableRows.push([
+                settlementDate,
+                `Settlement (Txn: ${settlementTxnId})\nNotes: ${settlementNotes}`,
+                "SETTLEMENT",
+                `Rs. ${Number(settlementAmount).toFixed(2)}`
+            ]);
+        }
+
         autoTable(doc, {
             startY: infoY + 35,
             head: [tableColumn],
@@ -521,7 +746,7 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         }
 
         // Bottom Branding
-        
+
 
         doc.save(`Statement_${subscriber.user.name}.pdf`);
     };
@@ -605,43 +830,167 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
     return (
         <div className="mb-5">
             {showHeader && (
-                <div className="d-flex align-items-center mb-4">
-                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                        style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #f3e9bd 0%, #ebdc87 100%)', color: '#915200' }}>
-                        <i className="fas fa-users-cog fa-lg"></i>
+                <div className="d-flex align-items-center justify-content-between mb-4">
+                    <div className="d-flex align-items-center">
+                        <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #f3e9bd 0%, #ebdc87 100%)', color: '#915200' }}>
+                            <i className="fas fa-users-cog fa-lg"></i>
+                        </div>
+                        <div>
+                            <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>User Subscriptions</h5>
+                            <small className="text-muted">Manage subscriber payments & dues</small>
+                        </div>
                     </div>
-                    <div>
-                        <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>User Subscriptions</h5>
-                        <small className="text-muted">Manage subscriber payments & dues</small>
+                    <div className="d-flex gap-2">
+                        {user?.plan === 'Premium' && (
+                            <Button
+                                variant="light"
+                                size="sm"
+                                className="rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                                style={{ width: '40px', height: '40px', color: '#915200' }}
+                                onClick={() => setShowDateSearch(!showDateSearch)}
+                                title="Search by Date"
+                            >
+                                <i className={`fas ${showDateSearch ? 'fa-times' : 'fa-calendar-alt'}`}></i>
+                            </Button>
+                        )}
+                        <Button
+                            variant="light"
+                            size="sm"
+                            className="rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                            style={{ width: '40px', height: '40px', color: '#915200' }}
+                            onClick={() => setShowSearch(!showSearch)}
+                            title="Search Users"
+                        >
+                            <i className={`fas ${showSearch ? 'fa-times' : 'fa-search'}`}></i>
+                        </Button>
                     </div>
                 </div>
             )}
 
+            {/* --- Date Filter Section (REMOVED: Moved to User Subscriptions Header) --- */}
+
+            {withdrawalRequests.length > 0 && (
+                <Card className="border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                    <Card.Header className="bg-white border-0 py-3 mx-2 mt-2">
+                        <div className="d-flex align-items-center">
+                            <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                                style={{ width: '40px', height: '40px', backgroundColor: '#fffbf0', color: '#915200' }}>
+                                <i className="fas fa-money-check-alt"></i>
+                            </div>
+                            <div>
+                                <h6 className="fw-bold mb-0" style={{ color: '#915200' }}>Withdrawal Requests</h6>
+                                <small className="text-muted">{withdrawalRequests.length} pending request(s)</small>
+                            </div>
+                        </div>
+                    </Card.Header>
+
+                    <Table responsive hover className="mb-0 align-middle">
+                        <thead style={{ backgroundColor: '#f8f9fa' }}>
+                            <tr>
+                                <th className="ps-4 py-3 text-secondary text-uppercase small">User</th>
+                                <th className="py-3 text-secondary text-uppercase small">Plan Details</th>
+                                <th className="py-3 text-secondary text-uppercase small">Saved Amount</th>
+                                <th className="py-3 text-secondary text-uppercase small">Bank Details</th>
+                                <th className="py-3 text-secondary text-uppercase small">Message</th>
+                                <th className="py-3 pe-4 text-end text-secondary text-uppercase small">Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {withdrawalRequests.map(req => (
+                                <tr key={req.subscriberId}>
+                                    <td className="ps-4">
+                                        <div className="d-flex align-items-center">
+                                            <div className="rounded-circle d-flex align-items-center justify-content-center me-2 bg-light border"
+                                                style={{ width: '35px', height: '35px' }}>
+                                                <span className="fw-bold small" style={{ color: '#915200' }}>{req.user.name?.charAt(0)}</span>
+                                            </div>
+                                            <div className="fw-bold text-dark">{req.user.name}</div>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <Badge bg="light" text="dark" className="border px-2 py-1 fw-normal">
+                                            {req.plan.planName}
+                                        </Badge>
+                                    </td>
+
+                                    <td>
+                                        <span className="fw-bold text-success">₹{Number(req.subscription.totalAmountPaid).toLocaleString()}</span>
+                                    </td>
+
+                                    <td className="small text-muted" style={{ maxWidth: '200px' }}>
+                                        <div className="fw-bold text-dark mb-1"><i className="fas fa-university me-1 text-secondary"></i>{req.withdrawal.request.bankName}</div>
+                                        <div>A/C: <span className="font-monospace">{req.withdrawal.request.accountNumber}</span></div>
+                                        <div>IFSC: <span className="font-monospace">{req.withdrawal.request.ifsc}</span></div>
+                                    </td>
+
+                                    <td className="small fst-italic text-muted">
+                                        {req.withdrawal.request.message ? `"${req.withdrawal.request.message}"` : '-'}
+                                    </td>
+
+                                    <td className="text-end pe-4">
+                                        <Button
+                                            size="sm"
+                                            className="px-3 rounded-pill fw-bold shadow-sm"
+                                            style={{
+                                                backgroundColor: '#915200',
+                                                borderColor: '#915200',
+                                                fontSize: '0.8rem'
+                                            }}
+                                            onClick={() => {
+                                                setSettlementForm({
+                                                    amount: req.subscription.totalAmountPaid.toString(),
+                                                    transactionId: '',
+                                                    note: ''
+                                                });
+                                                setSettlementModal({ show: true, subscriber: req });
+                                            }}
+                                        >
+                                            <i className="fas fa-check-circle me-1"></i> Settle
+                                        </Button>
+                                    </td>
+                                </tr>
+
+                            ))}
+                        </tbody>
+                    </Table>
+                </Card>
+            )}
+
+
             {/* Pending Payments Section */}
             {pendingPayments.length > 0 && (
                 <Card className="border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
-                    <Card.Header className="bg-white border-0 py-3">
+                    <Card.Header className="bg-white border-0 py-3 mx-2 mt-2">
                         <div className="d-flex align-items-center">
-                            <i className="fas fa-clock text-warning me-2"></i>
-                            <h6 className="fw-bold mb-0" style={{ color: '#915200' }}>Pending Offline Validations ({pendingPayments.length})</h6>
+                            <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                                style={{ width: '40px', height: '40px', backgroundColor: '#fff3cd', color: '#ffc107' }}>
+                                <i className="fas fa-clock"></i>
+                            </div>
+                            <div>
+                                <h6 className="fw-bold mb-0" style={{ color: '#915200' }}>Pending Offline Validations</h6>
+                                <small className="text-muted">{pendingPayments.length} payment(s) pending approval</small>
+                            </div>
                         </div>
                     </Card.Header>
                     <Table responsive hover className="mb-0 align-middle">
-                        <thead className="bg-light">
+                        <thead style={{ backgroundColor: '#f8f9fa' }}>
                             <tr>
-                                <th className="ps-4">User Details</th>
-                                <th>Plan</th>
-                                <th>Amount</th>
-                                <th>Proof</th>
-                                <th>Notes</th>
-                                <th className="text-end pe-4">Actions</th>
+                                <th className="ps-4 py-3 text-secondary text-uppercase small">User Details</th>
+                                <th className="py-3 text-secondary text-uppercase small">Plan</th>
+                                <th className="py-3 text-secondary text-uppercase small">Amount</th>
+                                <th className="py-3 text-secondary text-uppercase small">Proof</th>
+                                <th className="py-3 text-secondary text-uppercase small">Notes</th>
+                                <th className="py-3 pe-4 text-end text-secondary text-uppercase small">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {pendingPayments.map((payment) => (
                                 <tr key={payment._id}>
                                     <td className="ps-4">
-                                        <div className="d-flex align-items-start py-2">
+                                        <div className="d-flex align-items-center py-2">
                                             {payment.user?.profileImage ? (
                                                 <img
                                                     src={`${BASEURL}${payment.user.profileImage}`}
@@ -653,53 +1002,65 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                                 />
                                             ) : (
                                                 <div className="rounded-circle me-3 border d-flex align-items-center justify-content-center bg-light" style={{ width: '40px', height: '40px' }}>
-                                                    <i className="fas fa-user text-secondary"></i>
+                                                    <span className="fw-bold small text-muted">{payment.user?.name?.charAt(0)}</span>
                                                 </div>
                                             )}
                                             <div>
                                                 <div className="fw-bold text-dark">{payment.user?.name || 'Unknown'}</div>
                                                 <div className="small text-muted"><i className="fas fa-phone me-1" style={{ fontSize: '0.7rem' }}></i>{payment.user?.phone}</div>
-                                                {payment.user?.email && <div className="small text-muted"><i className="fas fa-envelope me-1" style={{ fontSize: '0.7rem' }}></i>{payment.user?.email}</div>}
-                                                {payment.user?.address && <div className="small text-muted" style={{ maxWidth: '200px' }}><i className="fas fa-map-marker-alt me-1" style={{ fontSize: '0.7rem' }}></i>{payment.user?.address}</div>}
                                             </div>
                                         </div>
                                     </td>
-                                    <td>{payment.chitPlan?.planName}</td>
                                     <td>
-                                        <span className="fw-bold text-success fs-5">₹{payment.amount}</span>
-                                        <div className="small text-muted">{new Date(payment.paymentDate).toLocaleDateString()}</div>
+                                        <Badge bg="light" text="dark" className="border px-2 py-1 fw-normal">
+                                            {payment.chitPlan?.planName}
+                                        </Badge>
                                     </td>
                                     <td>
-                                        {payment.proofImage ? (
-                                            <a href={`${BASEURL}${payment.proofImage}`} target="_blank" rel="noreferrer" className="d-inline-flex align-items-center text-decoration-none px-3 py-1 rounded-pill bg-light border" style={{ color: '#915200' }}>
-                                                <i className="fas fa-image me-2"></i> View Proof
-                                            </a>
-                                        ) : <span className="text-muted small">No Proof</span>}
+                                        <span className="fw-bold text-dark">₹{payment.amount}</span>
+                                        <div className="small text-muted" style={{ fontSize: '0.75rem' }}>{new Date(payment.paymentDate).toLocaleDateString()}</div>
+                                    </td>
+                                    <td>
+                                        <Button
+                                            variant="light"
+                                            size="sm"
+                                            className="d-inline-flex align-items-center text-decoration-none px-3 py-1 rounded-pill border small hover-shadow"
+                                            style={{ color: '#915200', borderColor: '#e0e0e0', backgroundColor: '#fff' }}
+                                            onClick={() => viewOfflineDetails(payment)}
+                                        >
+                                            <i className="fas fa-eye me-2"></i> View Details
+                                        </Button>
                                     </td>
                                     <td className="small text-muted" style={{ maxWidth: '150px' }} title={payment.notes}>
-                                        {payment.notes || '-'}
+                                        {payment.notes ? (payment.notes.length > 20 ? payment.notes.substring(0, 20) + '...' : payment.notes) : '-'}
                                     </td>
                                     <td className="text-end pe-4">
                                         <div className="d-flex justify-content-end gap-2">
-                                            <Button
-                                                variant="success"
-                                                size="sm"
-                                                className="rounded-pill px-3 fw-bold"
-                                                disabled={actionLoading === payment._id}
-                                                onClick={() => handleApprove(payment._id)}
-                                                style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
-                                            >
-                                                {actionLoading === payment._id ? '...' : <><i className="fas fa-check me-1"></i> Approve</>}
-                                            </Button>
-                                            <Button
-                                                variant="danger"
-                                                size="sm"
-                                                className="rounded-pill px-3 fw-bold"
-                                                disabled={actionLoading === payment._id}
-                                                onClick={() => handleReject(payment._id)}
-                                            >
-                                                <i className="fas fa-times"></i>
-                                            </Button>
+                                            <OverlayTrigger placement="top" overlay={<Tooltip>Approve Payment</Tooltip>}>
+                                                <Button
+                                                    variant="success"
+                                                    size="sm"
+                                                    className="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                                    style={{ width: '32px', height: '32px', backgroundColor: '#28a745', borderColor: '#28a745' }}
+                                                    disabled={actionLoading === payment._id}
+                                                    onClick={() => handleApprove(payment._id)}
+                                                >
+                                                    {actionLoading === payment._id ? <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> : <i className="fas fa-check"></i>}
+                                                </Button>
+                                            </OverlayTrigger>
+
+                                            <OverlayTrigger placement="top" overlay={<Tooltip>Reject Payment</Tooltip>}>
+                                                <Button
+                                                    variant="danger"
+                                                    size="sm"
+                                                    className="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                                                    style={{ width: '32px', height: '32px' }}
+                                                    disabled={actionLoading === payment._id}
+                                                    onClick={() => handleReject(payment._id)}
+                                                >
+                                                    <i className="fas fa-times"></i>
+                                                </Button>
+                                            </OverlayTrigger>
                                         </div>
                                     </td>
                                 </tr>
@@ -710,6 +1071,108 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
             )}
 
             <Card className="border-0 shadow-sm rounded-4 overflow-hidden">
+                {(showDateSearch || showSearch) && (
+                    <Card.Header className="bg-white border-0 py-3 mx-2 mt-2">
+                        <div className="p-3 bg-light rounded-3 animate__animated animate__fadeIn">
+                            {/* Date Search UI */}
+                            {user?.plan === 'Premium' && showDateSearch && (
+                                <div className="mb-3">
+                                    <h6 className="text-uppercase text-muted small fw-bold mb-2">Search Payments By Date</h6>
+                                    <div className="d-flex gap-2 mb-3">
+                                        <input
+                                            type="date"
+                                            className="form-control form-control-sm"
+                                            value={searchDate}
+                                            onChange={(e) => setSearchDate(e.target.value)}
+                                            style={{ maxWidth: '100%' }}
+                                        />
+                                        <Button
+                                            size="sm"
+                                            style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }}
+                                            onClick={handleDateSearch}
+                                            disabled={searchingDate || !searchDate}
+                                        >
+                                            {searchingDate ? 'Searching...' : 'Search'}
+                                        </Button>
+                                        {dailyPayments && (
+                                            <Button variant="outline-secondary" size="sm" onClick={clearDateSearch}>Clear</Button>
+                                        )}
+                                    </div>
+
+                                    {/* Daily Payments Results */}
+                                    {dailyPayments && (
+                                        <div className="bg-white p-3 rounded border">
+                                            <h6 className="fw-bold mb-2 small text-muted">
+                                                Date Results: {new Date(searchDate).toLocaleDateString()} ({dailyPayments.length})
+                                            </h6>
+                                            {dailyPayments.length === 0 ? (
+                                                <p className="text-muted small mb-0">No payments found.</p>
+                                            ) : (
+                                                <div className="table-responsive" style={{ maxHeight: '200px' }}>
+                                                    <Table size="sm" hover className="mb-0 small">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>User</th>
+                                                                <th>Plan</th>
+                                                                <th>Amount</th>
+                                                                <th>Type</th>
+                                                                <th>Action</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {dailyPayments.map(pay => (
+                                                                <tr key={pay._id}>
+                                                                    <td>{pay.user?.name}</td>
+                                                                    <td>{pay.chitPlan?.planName}</td>
+                                                                    <td className="text-success fw-bold">₹{pay.amount}</td>
+                                                                    <td>{pay.type}</td>
+                                                                    <td>
+                                                                        <Button
+                                                                            variant="link"
+                                                                            size="sm"
+                                                                            className="p-0 text-decoration-none"
+                                                                            style={{ color: '#915200' }}
+                                                                            onClick={() => generateInvoice(pay, { user: pay.user, plan: pay.chitPlan })}
+                                                                        >
+                                                                            <i className="fas fa-file-invoice"></i>
+                                                                        </Button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </Table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* User Search UI */}
+                            {showSearch && (
+                                <div>
+                                    <h6 className="text-uppercase text-muted small fw-bold mb-2">Search Subscribers</h6>
+                                    <div className="input-group input-group-sm">
+                                        <span className="input-group-text bg-white border-end-0"><i className="fas fa-search text-muted"></i></span>
+                                        <input
+                                            type="text"
+                                            className="form-control border-start-0"
+                                            placeholder="Search by Name, Phone, or Plan..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            autoFocus
+                                        />
+                                        {searchQuery && (
+                                            <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
+                                                <i className="fas fa-times"></i>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Card.Header>
+                )}
 
                 {loading ? (
                     <div className="text-center p-5">
@@ -717,10 +1180,10 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                             <span className="visually-hidden">Loading...</span>
                         </div>
                     </div>
-                ) : subscribers.length === 0 ? (
+                ) : filteredSubscribers.length === 0 ? (
                     <div className="text-center p-5 text-muted">
                         <i className="fas fa-inbox fa-3x mb-3 opacity-25"></i>
-                        <p>No subscribers found yet.</p>
+                        <p>{searchQuery ? 'No subscribers match your search.' : 'No subscribers found yet.'}</p>
                     </div>
                 ) : (
                     <Table responsive hover className="mb-0 custom-table bg-white">
@@ -732,11 +1195,12 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                 <th className="py-3" style={{ color: '#915200', textTransform: 'uppercase', fontSize: '0.85rem', minWidth: '150px' }}>Paid Progress</th>
                                 <th className="py-3" style={{ color: '#915200', textTransform: 'uppercase', fontSize: '0.85rem' }}>Balance</th>
                                 <th className="py-3 pe-4" style={{ color: '#915200', textTransform: 'uppercase', fontSize: '0.85rem' }}>Pending Dues</th>
+                                <th className="py-3 pe-4" style={{ color: '#915200', textTransform: 'uppercase', fontSize: '0.85rem' }}>Status</th>
                                 <th className="py-3 pe-4" style={{ color: '#915200', textTransform: 'uppercase', fontSize: '0.85rem' }}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {subscribers.map((item, index) => {
+                            {filteredSubscribers.map((item, index) => {
                                 const percentage = Math.round((item.subscription.installmentsPaid / item.plan.durationMonths) * 100);
                                 const remainingBalance = item.plan.totalAmount - item.subscription.totalAmountPaid;
                                 const nextDueAmount = item.plan.monthlyAmount;
@@ -810,6 +1274,17 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                                                     <i className="fas fa-check me-1"></i>Up-to-Date
                                                 </Badge>
                                             )}
+                                        </td>
+                                        <td className="pe-4">
+                                            <Badge bg={
+                                                item.subscription.status === 'active' ? 'primary' :
+                                                    item.subscription.status === 'completed' ? 'success' :
+                                                        item.subscription.status === 'settled' ? 'success' :
+                                                            item.subscription.status === 'requested_withdrawal' ? 'warning' :
+                                                                'secondary'
+                                            } className="px-2 py-1">
+                                                {item.subscription.status ? item.subscription.status.toUpperCase() : 'ACTIVE'}
+                                            </Badge>
                                         </td>
                                         <td>
                                             <div className="d-flex align-items-center gap-2">
@@ -1010,10 +1485,10 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                     </Button>
 
                     <Button
-                        style={{ backgroundColor: '#915200', borderColor: '#915200' }}
+                        style={{ background: 'linear-gradient(90deg, #915200 0%, #d4af37 100%)', border: 'none' }}
                         onClick={submitManualPayment}
                         disabled={submittingManual}
-                        className="px-4 fw-bold"
+                        className="px-5 fw-bold rounded-pill shadow-sm"
                     >
                         {submittingManual ? (
                             <>
@@ -1027,6 +1502,124 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                             </>
                         )}
                     </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Offline Payment Details Modal */}
+            <Modal show={offlineDetailsModal.show} onHide={() => setOfflineDetailsModal({ show: false, payment: null })} centered size="lg">
+                <Modal.Header closeButton className="border-0 pb-0">
+                    <Modal.Title className="fw-bold fs-5" style={{ color: '#915200' }}>
+                        <i className="fas fa-file-invoice-dollar me-2"></i> Payment Details
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="p-4">
+                    {offlineDetailsModal.payment && (
+                        <div className="row">
+                            <div className="col-md-6 border-end">
+                                <h6 className="text-uppercase text-muted small fw-bold mb-3">User Information</h6>
+                                <div className="d-flex align-items-center mb-4">
+                                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3 border shadow-sm"
+                                        style={{ width: '60px', height: '60px', backgroundColor: '#fff' }}>
+                                        {offlineDetailsModal.payment.user?.profileImage ? (
+                                            <img
+                                                src={`${BASEURL}${offlineDetailsModal.payment.user.profileImage.startsWith('/') ? '' : '/'}${offlineDetailsModal.payment.user.profileImage}`}
+                                                alt=""
+                                                className="rounded-circle"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                onError={onError}
+                                            />
+                                        ) : (
+                                            <span className="fw-bold fs-3 text-secondary">
+                                                {offlineDetailsModal.payment.user?.name?.charAt(0)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h5 className="mb-1 fw-bold text-dark">{offlineDetailsModal.payment.user?.name}</h5>
+                                        <div className="text-muted small"><i className="fas fa-phone me-1"></i>{offlineDetailsModal.payment.user?.phone}</div>
+                                    </div>
+                                </div>
+
+                                <h6 className="text-uppercase text-muted small fw-bold mb-3">Transaction Info</h6>
+                                <div className="p-3 bg-light rounded-3 mb-3">
+                                    <div className="d-flex justify-content-between mb-2">
+                                        <span className="text-muted">Amount</span>
+                                        <span className="fw-bold text-success fs-5">₹{offlineDetailsModal.payment.amount}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between mb-2">
+                                        <span className="text-muted">Date</span>
+                                        <span className="fw-bold text-dark">{new Date(offlineDetailsModal.payment.paymentDate).toLocaleDateString()}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between">
+                                        <span className="text-muted">Plan</span>
+                                        <span className="fw-bold text-dark">{offlineDetailsModal.payment.chitPlan?.planName}</span>
+                                    </div>
+                                </div>
+
+                                <div className="mb-3">
+                                    <label className="text-uppercase text-muted small fw-bold mb-1">Notes</label>
+                                    <div className="p-3 border rounded bg-white text-muted fst-italic">
+                                        {offlineDetailsModal.payment.notes || "No notes provided."}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <h6 className="text-uppercase text-muted small fw-bold mb-3">Payment Proof</h6>
+                                {offlineDetailsModal.payment.proofImage ? (
+                                    <div className="text-center bg-light rounded-3 p-2 border" style={{ minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <img
+                                            src={`${BASEURL}${offlineDetailsModal.payment.proofImage}`}
+                                            alt="Proof"
+                                            className="img-fluid rounded shadow-sm"
+                                            style={{ maxHeight: '400px', objectFit: 'contain' }}
+                                            onError={(e) => { e.target.src = 'https://via.placeholder.com/400x300?text=Image+Not+Found'; }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="text-center p-5 border rounded-3 bg-light text-muted">
+                                        <i className="fas fa-image-slash fa-3x mb-3 opacity-50"></i>
+                                        <p>No proof image uploaded.</p>
+                                    </div>
+                                )}
+                                {offlineDetailsModal.payment.proofImage && (
+                                    <div className="text-center mt-3">
+                                        <a href={`${BASEURL}${offlineDetailsModal.payment.proofImage}`} target="_blank" rel="noreferrer" className="btn btn-outline-primary btn-sm rounded-pill">
+                                            <i className="fas fa-external-link-alt me-1"></i> Open Full Image
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0">
+                    <Button variant="secondary" onClick={() => setOfflineDetailsModal({ show: false, payment: null })} className="rounded-pill px-4">
+                        <i className="fas fa-times me-2"></i> Close
+                    </Button>
+                    {offlineDetailsModal.payment && (
+                        <>
+                            <Button
+                                variant="danger"
+                                className="rounded-pill px-4"
+                                onClick={() => {
+                                    setOfflineDetailsModal({ show: false, payment: null });
+                                    handleReject(offlineDetailsModal.payment._id);
+                                }}
+                            >
+                                <i className="fas fa-times me-2"></i> Reject
+                            </Button>
+                            <Button
+                                variant="success"
+                                className="rounded-pill px-4"
+                                onClick={() => {
+                                    setOfflineDetailsModal({ show: false, payment: null });
+                                    handleApprove(offlineDetailsModal.payment._id);
+                                }}
+                            >
+                                <i className="fas fa-check me-2"></i> Approve
+                            </Button>
+                        </>
+                    )}
                 </Modal.Footer>
             </Modal>
 
@@ -1264,6 +1857,65 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                 </Modal.Body>
                 <Modal.Footer className="bg-light border-top-0 py-2">
                     <Button variant="secondary" size="sm" onClick={() => setShowHistoryModal(false)}>Close</Button>
+                </Modal.Footer>
+            </Modal>
+            {/* Settlement Modal */}
+            <Modal show={settlementModal.show} onHide={() => setSettlementModal({ show: false, subscriber: null })} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title className="fw-bold" style={{ color: '#915200' }}>Settle Withdrawal</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {settlementModal.subscriber && (
+                        <div>
+                            <p>Settle funds for <strong>{settlementModal.subscriber.user.name}</strong>.</p>
+                            <div className="alert alert-warning py-2 border-0" style={{ backgroundColor: '#FFF8E1', color: '#856404' }}>
+                                Total Saved: <strong>₹{settlementModal.subscriber.subscription.totalAmountPaid}</strong>
+                            </div>
+
+                            <div className="mb-3">
+                                <label className="form-label small fw-bold">Settlement Amount (₹)</label>
+                                <input
+                                    type="number"
+                                    className="form-control"
+                                    disabled
+                                    value={settlementForm.amount}
+                                    onChange={(e) => setSettlementForm({ ...settlementForm, amount: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="mb-3">
+                                <label className="form-label small fw-bold">Transaction ID / Reference</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    value={settlementForm.transactionId}
+                                    onChange={(e) => setSettlementForm({ ...settlementForm, transactionId: e.target.value })}
+                                    placeholder="UPI Ref, Cheque No, etc."
+                                />
+                            </div>
+
+                            <div className="mb-3">
+                                <label className="form-label small fw-bold">Notes</label>
+                                <textarea
+                                    className="form-control"
+                                    rows="2"
+                                    value={settlementForm.note}
+                                    onChange={(e) => setSettlementForm({ ...settlementForm, note: e.target.value })}
+                                ></textarea>
+                            </div>
+                        </div>
+                    )}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setSettlementModal({ show: false, subscriber: null })}>Cancel</Button>
+                    <Button
+                        variant="primary"
+                        onClick={executeSettlement}
+                        disabled={submittingSettlement}
+                        style={{ backgroundColor: '#915200', borderColor: '#915200' }}
+                    >
+                        {submittingSettlement ? 'Processing...' : 'Confirm Settlement'}
+                    </Button>
                 </Modal.Footer>
             </Modal>
         </div>

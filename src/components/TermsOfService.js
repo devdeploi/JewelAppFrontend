@@ -180,8 +180,8 @@ const TermsOfService = () => {
                                 },
                                 {
                                     title: "3. Subscription & Payments",
-                                    content: "Subscriptions are billed monthly. All payments processed via Razorpay are final and non-refundable. Failure to pay may result in temporary suspension of services.",
-                                    warning: "Important: It is mandatory to configure a valid Razorpay account to activate and maintain your merchant subscription."
+                                    content: "Subscriptions are billed monthly. All payments processed via our secure payment gateway are final and non-refundable. Failure to pay may result in temporary suspension of services.",
+                                    warning: "Important: It is mandatory to maintain a valid subscription to access merchant services."
                                 },
                                 {
                                     title: "4. Data Responsibility",

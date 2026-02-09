@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Button, Card, Navbar, Nav, Offcanvas } from 'react-bootstrap';
+import { Container, Row, Col, Button, Card, Navbar, Nav, Offcanvas, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
@@ -7,9 +7,13 @@ const LandingPage = () => {
     const [scrolled, setScrolled] = useState(false);
     const [showOffcanvas, setShowOffcanvas] = useState(false);
     const [billingCycle, setBillingCycle] = useState('monthly');
+    const [showComingSoon, setShowComingSoon] = useState(false);
 
     const handleClose = () => setShowOffcanvas(false);
     const handleShow = () => setShowOffcanvas(true);
+
+    const handleComingSoonClose = () => setShowComingSoon(false);
+    const handleComingSoonShow = () => setShowComingSoon(true);
 
     // Brand Colors
     const brandColor = '#915200'; // Primary Bronze/Brown
@@ -138,7 +142,8 @@ const LandingPage = () => {
                                     className="px-4 ms-lg-3 fw-bold mt-3 mt-lg-0"
                                     style={{ backgroundColor: brandColor, borderColor: brandColor }}
                                     onClick={() => {
-                                        navigate('/register');
+                                        // navigate('/register');
+                                        handleComingSoonShow();
                                         handleClose();
                                     }}
                                 >
@@ -183,7 +188,8 @@ const LandingPage = () => {
                                     size="lg"
                                     className="fw-bold px-5 rounded-pill shadow hover-scale"
                                     style={{ backgroundColor: brandColor, borderColor: brandColor }}
-                                    onClick={() => navigate('/register')}
+                                    // onClick={() => navigate('/register')}
+                                    onClick={handleComingSoonShow}
                                 >
                                     Get Started
                                 </Button>
@@ -679,7 +685,8 @@ const LandingPage = () => {
                                 background: `linear-gradient(135deg, ${brandColor} 0%, ${goldColor} 100%)`,
                                 transition: 'all 0.3s ease'
                             }}
-                            onClick={() => navigate('/register')}
+                            // onClick={() => navigate('/register')}
+                            onClick={handleComingSoonShow}
                         >
                             <span className="position-relative z-1 d-flex align-items-center">
                                 Start Your Application <i className="fas fa-arrow-right ms-2"></i>
@@ -1022,7 +1029,8 @@ const LandingPage = () => {
                                                 color: plan.recommended ? 'white' : '#333',
                                                 transition: 'all 0.3s ease'
                                             }}
-                                            onClick={() => navigate('/register')}
+                                            // onClick={() => navigate('/register')}
+                                            onClick={handleComingSoonShow}
                                         >
                                             <span className="position-relative z-2">Get Started</span>
                                             {plan.recommended && (
@@ -1280,6 +1288,29 @@ const LandingPage = () => {
                 }
                 `}
             </style>
+
+            {/* Coming Soon Modal */}
+            <Modal show={showComingSoon} onHide={handleComingSoonClose} centered>
+                <Modal.Header closeButton className="border-0">
+                </Modal.Header>
+                <Modal.Body className="text-center pb-5">
+                    <div className="mb-4">
+                        <img src="/images/AURUM.png" alt="Aurum Logo" height="80" />
+                    </div>
+                    <h3 className="fw-bold mb-3" style={{ color: brandColor }}>Coming Soon!</h3>
+                    <p className="text-muted">
+                        We are currently finalizing our registration process to serve you better.
+                        Please check back shortly!
+                    </p>
+                    <Button
+                        className="px-4 py-2 mt-3 rounded-pill fw-bold border-0"
+                        style={{ background: `linear-gradient(135deg, ${brandColor}, ${goldColor})` }}
+                        onClick={handleComingSoonClose}
+                    >
+                        Got it
+                    </Button>
+                </Modal.Body>
+            </Modal>
         </div>
     );
 };

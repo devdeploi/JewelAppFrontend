@@ -11,6 +11,7 @@ import MerchantSubscribers from './MerchantSubscribers';
 import { APIURL } from '../utils/Function';
 import SchoolHubAd from './ads/SchoolHubAd';
 import QuickproAd from './ads/QuickproAd';
+import CustomAdsManager from './CustomAdsManager';
 
 import {
     Chart as ChartJS,
@@ -117,7 +118,8 @@ const MerchantDashboard = ({ user, onLogout }) => {
         const fetchProfile = async () => {
             if (!user._id) return;
             try {
-                const { data } = await axios.get(`${APIURL}/merchants/${user._id}`);
+                const config = { headers: { Authorization: `Bearer ${user.token}` } };
+                const { data } = await axios.get(`${APIURL}/merchants/${user._id}`, config);
                 setMerchantData(data);
             } catch (error) {
                 console.error("Error fetching merchant profile", error);
@@ -126,7 +128,7 @@ const MerchantDashboard = ({ user, onLogout }) => {
             }
         };
         fetchProfile();
-    }, [user._id]);
+    }, [user.token, user._id]);
 
 
     // Fetch Detailed Stats for Advanced Charts
@@ -318,12 +320,12 @@ const MerchantDashboard = ({ user, onLogout }) => {
                 // Convert ounce → gram (24K)
                 const pricePerGram24K = pricePerOunce / 31.1035;
 
-                // Chennai market adjustments
-                const chennaiAdjusted = pricePerGram24K * 1.01;
+                // India Market Adjustments (2026) - ~11% Markup for Retail (Import Duty + GST + Premium)
+                const marketMarkup = 1.11;
 
                 // Buy / Sell spread
-                const buyPrice24 = chennaiAdjusted * 1.03;
-                const sellPrice24 = chennaiAdjusted * 0.97;
+                const buyPrice24 = pricePerGram24K * marketMarkup;
+                const sellPrice24 = buyPrice24 * 0.96; // ~4% spread for Sell back
 
                 const buyPrice22 = buyPrice24 * (22 / 24);
                 const sellPrice22 = sellPrice24 * (22 / 24);
@@ -449,9 +451,10 @@ const MerchantDashboard = ({ user, onLogout }) => {
     const merchantTabs = [
         { id: 'overview', icon: 'fa-tachometer-alt', label: 'Overview' },
         { id: 'plans', icon: 'fa-list-alt', label: 'My Plans' },
-        { id: 'subscribers', icon: 'fa-users', label: 'Subscribers' }, // NEW TAB
+        { id: 'subscribers', icon: 'fa-users', label: 'Subscribers' },
+        merchantData.plan === 'Premium' ? { id: 'ads', icon: 'fa-ad', label: 'Custom Ads' } : null,
         { id: 'profile', icon: 'fa-user-cog', label: 'Profile' },
-    ];
+    ].filter(Boolean);
 
     const isPremium = merchantData.plan === 'Premium';
     const isBasic = merchantData.plan === 'Basic' || !merchantData.plan;
@@ -550,7 +553,7 @@ const MerchantDashboard = ({ user, onLogout }) => {
                                     <div className={`badge ${isPremium ? 'text-dark' : 'bg-secondary text-white'} fw-bold px-4 py-3 rounded-pill fs-6 shadow`}
                                         style={isPremium ? { background: 'linear-gradient(90deg, #ebdc87 0%, #e2d183 100%)' } : {}}>
                                         <i className={`fas ${isPremium ? 'fa-crown' : 'fa-star'} me-2`}></i>
-                                        {isPremium ? 'Premium' : 'Standard'}
+                                        {isPremium ? 'Premium' : merchantData.plan}
                                     </div>
 
                                 </div>
@@ -1108,10 +1111,12 @@ const MerchantDashboard = ({ user, onLogout }) => {
                 return <ManageChits merchantId={user.id} />;
             case 'subscribers':
                 return <div className="p-3"><MerchantSubscribers merchantId={user.id || user._id} user={user} /></div>;
+            case 'ads':
+                return <CustomAdsManager user={user} />;
             case 'profile':
-                return <MerchantProfile merchantData={user} />;
+                return <MerchantProfile merchantData={merchantData} onLogout={onLogout} />;
             default:
-                return <div>Select a tab</div>;
+                return null;
         }
     };
 

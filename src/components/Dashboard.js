@@ -39,9 +39,10 @@ const Dashboard = ({ onLogout }) => {
                 const pricePerOunce = data?.items?.[0]?.xauPrice;
                 if (!pricePerOunce) throw new Error("Invalid gold data");
                 const pricePerGram24K = pricePerOunce / 31.1035;
-                const chennaiAdjusted = pricePerGram24K * 1.01;
-                const buyPrice = chennaiAdjusted * 1.03;
-                const sellPrice = chennaiAdjusted * 0.97;
+                // India Market Adjustments (2026) -> ~11% Markup
+                const marketMarkup = 1.11;
+                const buyPrice = pricePerGram24K * marketMarkup;
+                const sellPrice = buyPrice * 0.96;
                 setGoldRates({
                     buy: buyPrice.toFixed(2),
                     sell: sellPrice.toFixed(2),
