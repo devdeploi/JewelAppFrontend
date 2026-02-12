@@ -7,6 +7,33 @@ import BottomNav from './BottomNav';
 import './Dashboard.css';
 import axios from 'axios';
 import { APIURL } from '../utils/Function';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+    PointElement,
+    LineElement,
+    Filler
+} from 'chart.js';
+import { Doughnut, Line } from 'react-chartjs-2';
+
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend,
+    ArcElement,
+    PointElement,
+    LineElement,
+    Filler
+);
 
 const Dashboard = ({ onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
@@ -16,7 +43,15 @@ const Dashboard = ({ onLogout }) => {
     const [stats, setStats] = useState({
         merchantsCount: 0,
         usersCount: 0,
-        pendingMerchants: 0
+        pendingMerchants: 0,
+        approvedMerchants: 0,
+        rejectedMerchants: 0,
+        monthlyRevenue: 0 // Mock or calc
+    });
+
+    const [chartData, setChartData] = useState({
+        merchantDistribution: null,
+        userGrowth: null
     });
 
     const [userName, setUserName] = useState('');
@@ -62,14 +97,51 @@ const Dashboard = ({ onLogout }) => {
                 const user = JSON.parse(localStorage.getItem('user'));
                 const token = user?.token;
                 const config = { headers: { Authorization: `Bearer ${token}` } };
-                const response = await axios.get(`${APIURL}/merchants?limit=10`, config); // Minimize data
-                const response2 = await axios.get(`${APIURL}/users?limit=10`, config);
-                const pendingResponse = await axios.get(`${APIURL}/merchants?status=Pending&limit=10`, config);
+                const response = await axios.get(`${APIURL}/merchants?limit=1`, config);
+                const response2 = await axios.get(`${APIURL}/users?limit=1`, config);
+                const pendingResponse = await axios.get(`${APIURL}/merchants?status=Pending&limit=1`, config);
+                const approvedResponse = await axios.get(`${APIURL}/merchants?status=Approved&limit=1`, config);
+                const rejectedResponse = await axios.get(`${APIURL}/merchants?status=Rejected&limit=1`, config);
+
+                const totalMerchants = response.data.pagination.totalRecords || 0;
+                const totalUsers = response2.data.total || 0;
+                const pending = pendingResponse.data.pagination.totalRecords || 0;
+                const approved = approvedResponse.data.pagination.totalRecords || 0;
+                const rejected = rejectedResponse.data.pagination.totalRecords || 0;
 
                 setStats({
-                    merchantsCount: response.data.pagination.totalRecords || 0,
-                    usersCount: response2.data.total || 0,
-                    pendingMerchants: pendingResponse.data.pagination.totalRecords || 0
+                    merchantsCount: totalMerchants,
+                    usersCount: totalUsers,
+                    pendingMerchants: pending,
+                    approvedMerchants: approved,
+                    rejectedMerchants: rejected
+                });
+
+                // Prepare Chart Data
+                setChartData({
+                    merchantDistribution: {
+                        labels: ['Approved', 'Pending', 'Rejected'],
+                        datasets: [
+                            {
+                                data: [approved, pending, rejected],
+                                backgroundColor: ['#198754', '#ffc107', '#dc3545'],
+                                hoverOffset: 4
+                            },
+                        ],
+                    },
+                    userGrowth: {
+                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], // Mock labels
+                        datasets: [
+                            {
+                                label: 'User Growth',
+                                data: [totalUsers * 0.2, totalUsers * 0.3, totalUsers * 0.5, totalUsers * 0.7, totalUsers * 0.85, totalUsers], // Mock trend matching total
+                                fill: true,
+                                backgroundColor: 'rgba(212, 175, 55, 0.2)',
+                                borderColor: '#D4AF37',
+                                tension: 0.4
+                            }
+                        ]
+                    }
                 });
 
             } catch (error) {
@@ -100,35 +172,136 @@ const Dashboard = ({ onLogout }) => {
             case 'overview':
             default:
                 return (
-                    <Row className="g-4">
-                        <Col md={3}>
-                            <div className="stat-card">
-                                <div className="stat-icon-wrapper" style={{ background: "#FFD36A", color: "#915200" }}>
-                                    <i className="fas fa-store"></i>
+                    <div className="container-fluid p-0 fade-in-up">
+                        {/* Styles for Animations */}
+                        <style>{`
+                            @keyframes shimmer { 0% { transform: translateX(-100%) translateY(-100%) rotate(30deg); } 100% { transform: translateX(300%) translateY(300%) rotate(30deg); } }
+                            @keyframes goldPulse { 0%, 100% { box-shadow: 0 0 20px rgba(145, 82, 0, 0.2); } 50% { box-shadow: 0 0 30px rgba(183, 121, 31, 0.3); } }
+                            @keyframes shine { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+                            .gold-card-shine { animation: goldPulse 3s ease-in-out infinite; }
+                            .gold-card-shine::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.6) 50%, transparent 70%); animation: shimmer 3s infinite; pointer-events: none; }
+                            .price-shimmer { background: linear-gradient(90deg, #915200 0%, #b7791f 25%, #d4af37 50%, #b7791f 75%, #915200 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: shine 3s linear infinite; }
+                        `}</style>
+
+                        {/* Welcome Banner */}
+                        <div className="border-0 rounded-4 mb-4 overflow-hidden">                            <div className="card-body p-4 d-flex align-items-center justify-content-between position-relative">
+                            <div className="position-absolute end-0 top-0 h-100 w-50" style={{ background: 'linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.05))', clipPath: 'polygon(30% 0, 100% 0, 100% 100%, 0% 100%)' }}></div>
+                            <div className="position-relative z-1">
+                                <h2 className="fw-bold mb-1">Welcome Back, {userName || 'Admin'}!</h2>
+                                <p className="mb-0 text-muted">Here's what's happening in your dashboard today.</p>
+                            </div>
+                            {/* <div className="badge bg-warning text-dark fw-bold px-4 py-2 rounded-pill fs-6 shadow">
+                                    <i className="fas fa-crown me-2"></i>Admin Access
+                                </div> */}
+                        </div>
+                        </div>
+
+                        {/* Gold Rates Card */}
+                        <div className="card border-0 rounded-4 mb-4 overflow-hidden position-relative gold-card-shine"
+                            style={{ background: 'linear-gradient(145deg, #fef9e7 0%, #fff8dc 50%, #fffacd 100%)', border: '1px solid rgba(145, 82, 0, 0.2)' }}>
+                            <div className="card-body p-4">
+                                <div className="d-flex align-items-center justify-content-between mb-4">
+                                    <div className="d-flex align-items-center gap-3">
+                                        <div className="position-relative" style={{ width: '42px', height: '42px', background: 'linear-gradient(135deg, #d4af37 0%, #b7791f 50%, #915200 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 15px rgba(145, 82, 0, 0.3)' }}>
+                                            <i className="fas fa-coins text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>Live Gold Rates</h5>
+                                            <small className="text-muted">Real-time market updates</small>
+                                        </div>
+                                    </div>
+                                    <span className="badge bg-danger rounded-pill px-3 py-2">LIVE</span>
                                 </div>
-                                <h3 className="stat-value">{stats.merchantsCount}</h3>
-                                <div className="stat-label">Total Merchants</div>
+                                <Row className="g-3">
+                                    {[
+                                        { label: '24K', price: goldRates.buy24 || goldRates.buy }, // Fallback to buy if distinct 24k not set
+                                        { label: '22K', price: goldRates.buy22 || ((goldRates.buy * 22) / 24).toFixed(2) },
+                                        { label: '18K', price: goldRates.buy18 || ((goldRates.buy * 18) / 24).toFixed(2) }
+                                    ].map((rate, idx) => (
+                                        <Col key={idx} xs={4}>
+                                            <div className="text-center p-3 rounded-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(145,82,0,0.1)' }}>
+                                                <div className="badge bg-warning bg-opacity-25 text-dark mb-2">{rate.label}</div>
+                                                <h4 className="fw-bold mb-0 price-shimmer">₹{rate.price}</h4>
+                                                <small className="text-muted" style={{ fontSize: '0.7rem' }}>per gram</small>
+                                            </div>
+                                        </Col>
+                                    ))}
+                                </Row>
                             </div>
-                        </Col>
-                        <Col md={3}>
-                            <div className="stat-card">
-                                <div className="stat-icon-wrapper" style={{ background: "#FFD36A", color: "#915200" }}>
-                                    <i className="fas fa-user"></i>
+                        </div>
+
+                        {/* Stat Cards */}
+                        <Row className="g-4 mb-4">
+                            {[
+                                { title: 'Total Merchants', value: stats.merchantsCount, icon: 'fa-store', color: '#915200' },
+                                { title: 'Total Users', value: stats.usersCount, icon: 'fa-users', color: '#198754' },
+                                { title: 'Pending Requests', value: stats.pendingMerchants, icon: 'fa-clock', color: '#fd7e14' },
+                                { title: 'Active Plans', value: '45', icon: 'fa-file-invoice-dollar', color: '#0d6efd' } // Mock until available
+                            ].map((stat, idx) => (
+                                <Col md={3} key={idx}>
+                                    <div className="card border-0 shadow-sm rounded-4 h-100">
+                                        <div className="card-body p-4">
+                                            <div className="d-flex justify-content-between align-items-center mb-3">
+                                                <div className="rounded-circle p-3 d-flex align-items-center justify-content-center"
+                                                    style={{ width: '50px', height: '50px', backgroundColor: `${stat.color}20`, color: stat.color }}>
+                                                    <i className={`fas ${stat.icon} fa-lg`}></i>
+                                                </div>
+                                            </div>
+                                            <h6 className="text-muted text-uppercase small fw-bold">{stat.title}</h6>
+                                            <h3 className="fw-bold mb-0" style={{ color: '#2c3e50' }}>{stat.value}</h3>
+                                        </div>
+                                    </div>
+                                </Col>
+                            ))}
+                        </Row>
+
+                        {/* Charts Row */}
+                        <Row className="g-4">
+                            <Col md={4}>
+                                <div className="card border-0 shadow-sm rounded-4 h-100">
+                                    <div className="card-body p-4">
+                                        <h5 className="fw-bold mb-4" style={{ color: '#915200' }}>Merchant Status</h5>
+                                        <div style={{ height: '250px', position: 'relative' }}>
+                                            {chartData.merchantDistribution && (
+                                                <Doughnut
+                                                    data={chartData.merchantDistribution}
+                                                    options={{
+                                                        responsive: true,
+                                                        maintainAspectRatio: false,
+                                                        plugins: { legend: { position: 'bottom' } },
+                                                        cutout: '70%'
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                                <h3 className="stat-value">{stats.usersCount}</h3>
-                                <div className="stat-label">Total Users</div>
-                            </div>
-                        </Col>
-                        <Col md={6}>
-                            <div className="stat-card premium-stat">
-                                <h3>Welcome Back, {userName || 'Admin'}</h3>
-                                <p className="mb-0 text-white-50">You have {stats.pendingMerchants} pending merchant approvals today.</p>
-                            </div>
-                        </Col>
-                        <Col md={12} className="mt-4">
-                            <Subscribers />
-                        </Col>
-                    </Row>
+                            </Col>
+                            <Col md={8}>
+                                <div className="card border-0 shadow-sm rounded-4 h-100">
+                                    <div className="card-body p-4">
+                                        <h5 className="fw-bold mb-4" style={{ color: '#915200' }}>User Growth Trend</h5>
+                                        <div style={{ height: '250px' }}>
+                                            {chartData.userGrowth && (
+                                                <Line
+                                                    data={chartData.userGrowth}
+                                                    options={{
+                                                        responsive: true,
+                                                        maintainAspectRatio: false,
+                                                        plugins: { legend: { display: false } },
+                                                        scales: {
+                                                            y: { beginAtZero: true, grid: { color: '#f0f0f0' } },
+                                                            x: { grid: { display: false } }
+                                                        }
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </Col>
+                        </Row>
+                    </div>
                 );
         }
     };
@@ -138,7 +311,7 @@ const Dashboard = ({ onLogout }) => {
             {/* Header */}
             <div className="dashboard-header">
                 <div className="d-flex align-items-center">
-                    <img src="/images/AURUM.png" alt="Logo" className="me-2" style={{ height: '60px', background: 'rgba(255, 255, 255, 0.4)', borderRadius: '50%', padding: '5px' }} />
+                    <img src="/images/AURUM.png" alt="Logo" className="me-2" style={{ height: '60px' }} />
                     <h2
                         className="dashboard-title me-3"
                         style={{
@@ -151,115 +324,10 @@ const Dashboard = ({ onLogout }) => {
                     >
                         AURUM
                     </h2>
-
-
-                    <div
-                        className="d-none d-lg-flex align-items-center rounded-pill px-3 py-0 shadow-lg"
-                        style={{
-                            background:
-                                "linear-gradient(225deg, #FFF4CC 0%, #E6C866 40%, #C9A441 75%, #A67C00 100%)",
-                            border: "1px solid rgba(90,62,18,0.35)",
-                            minWidth: "280px",
-                        }}
-                    >
-                        {/* Premium Coin */}
-                        <div
-                            className="d-flex align-items-center justify-content-center me-3"
-                            style={{
-                                width: "35px",
-                                height: "35px",
-                                borderRadius: "50%",
-                                background:
-                                    "radial-gradient(circle at 30% 30%, #FFF4CC, #C9A441 60%, #A67C00)",
-                                boxShadow:
-                                    "inset 0 2px 4px rgba(255,255,255,0.6), 0 6px 14px rgba(201,164,65,0.6)",
-                                border: "1px solid rgba(90,62,18,0.4)",
-                            }}
-                        >
-                            <i
-                                className="fas fa-coins"
-                                style={{
-                                    fontSize: "1.1rem",
-                                    color: "#5A3E12",
-                                    textShadow: "0 1px 1px rgba(255,255,255,0.5)",
-                                }}
-                            />
-                        </div>
-
-                        {/* Buy Price */}
-                        <div className="d-flex flex-column lh-1 me-4">
-                            <span
-                                className="fw-semibold text-uppercase"
-                                style={{
-                                    fontSize: "0.65rem",
-                                    letterSpacing: "1.4px",
-                                    color: "#6F4E16",
-                                }}
-                            >
-                                24K Gold Buy
-                            </span>
-
-                            {goldRates.loading ? (
-                                <span className="spinner-border spinner-border-sm text-dark mt-1"></span>
-                            ) : (
-                                <div className="d-flex align-items-end mt-1">
-                                    <span
-                                        className="fw-bold"
-                                        style={{
-                                            fontSize: "1.35rem",
-                                            color: "#5A3E12",
-                                            letterSpacing: "-0.3px",
-                                        }}
-                                    >
-                                        ₹{goldRates.buy}
-                                    </span>
-                                    <span
-                                        style={{
-                                            fontSize: "0.75rem",
-                                            marginLeft: "4px",
-                                            color: "#6F4E16",
-                                        }}
-                                    >
-                                        /gm
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Sell Price */}
-                        {!goldRates.loading && (
-                            <div
-                                className="ps-3"
-                                style={{
-                                    borderLeft: "1px solid rgba(90,62,18,0.35)",
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        fontSize: "0.6rem",
-                                        letterSpacing: "1.3px",
-                                        color: "#6F4E16",
-                                    }}
-                                >
-                                    SELL
-                                </span>
-                                <span
-                                    className="fw-semibold d-block"
-                                    style={{
-                                        fontSize: "0.9rem",
-                                        color: "#5A3E12",
-                                    }}
-                                >
-                                    ₹{goldRates.sell}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
                 </div>
 
                 <Button
-                    className="rounded-pill px-4 d-flex align-items-center fw-bold"
+                    className="rounded-pill px-4 d-flex align-items-center fw-bold ms-auto" // Added ms-auto to push to right
                     onClick={() => setShowLogoutModal(true)}
                     style={{
                         background: "linear-gradient(90deg, #ebdc87 0%, #e2d183 100%)",

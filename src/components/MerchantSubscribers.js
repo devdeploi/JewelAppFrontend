@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Badge, Card, ProgressBar, Button, Modal, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Table, Badge, Card, ProgressBar, Button, Modal, OverlayTrigger, Tooltip, Pagination } from 'react-bootstrap';
 import axios from 'axios';
 import { APIURL, BASEURL, onError } from '../utils/Function';
 import jsPDF from 'jspdf';
@@ -15,6 +15,14 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
     // Search States
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(6);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
 
     const [confirmModal, setConfirmModal] = useState({
         show: false,
@@ -130,6 +138,14 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         );
     }, [subscribers, searchQuery]);
 
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentSubscribers = filteredSubscribers.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredSubscribers.length / itemsPerPage);
+
+    const handlePageChange = (pageNumber) => setCurrentPage(pageNumber);
+
     const handleApprove = (paymentId) => {
         setConfirmModal({
             show: true,
@@ -227,6 +243,13 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
         message: '',
         payment: null,
         subscriber: null
+    });
+
+    // Settlement Success Modal State
+    const [settlementSuccessModal, setSettlementSuccessModal] = useState({
+        show: false,
+        subscriber: null,
+        settlementData: null
     });
 
     // Offline Payment Details Modal
@@ -531,16 +554,17 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                 note: settlementForm.note
             }, config);
 
-            // Close modal
+            // Close settlement input modal
             const settledSub = settlementModal.subscriber;
             const settlementData = { ...settlementForm };
             setSettlementModal({ show: false, subscriber: null });
 
-            // Show success alert and offer receipt
-            // Since we don't have a complex alert system here, we just use standard confirm or alert
-            if (window.confirm("Settlement Successful! Click OK to download receipt.")) {
-                generateSettlementReceipt(settledSub, settlementData);
-            }
+            // Show custom success modal instead of system alert
+            setSettlementSuccessModal({
+                show: true,
+                subscriber: settledSub,
+                settlementData: settlementData
+            });
 
             fetchSubscribers();
         } catch (error) {
@@ -1200,7 +1224,7 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredSubscribers.map((item, index) => {
+                            {currentSubscribers.map((item, index) => {
                                 const percentage = Math.round((item.subscription.installmentsPaid / item.plan.durationMonths) * 100);
                                 const remainingBalance = item.plan.totalAmount - item.subscription.totalAmountPaid;
                                 const nextDueAmount = item.plan.monthlyAmount;
@@ -1343,6 +1367,104 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                             })}
                         </tbody>
                     </Table>
+                )}
+
+                {/* Pagination */}
+                {filteredSubscribers.length > 0 && totalPages > 1 && (
+                    <div className="d-flex justify-content-center py-3 border-top bg-white rounded-bottom px-3 custom-pagination">
+                        <style>
+                            {`
+                                .custom-pagination .page-link {
+                                    color: #915200;
+                                    border: none;
+                                    margin: 0 4px;
+                                    border-radius: 50%;
+                                    width: 36px;
+                                    height: 36px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-weight: 600;
+                                    transition: all 0.2s ease;
+                                    text-decoration: none;
+                                }
+                                .custom-pagination .page-item.active .page-link {
+                                    background: linear-gradient(135deg, #915200 0%, #d4af37 100%);
+                                    color: white;
+                                    box-shadow: 0 4px 10px rgba(145, 82, 0, 0.2);
+                                }
+                                .custom-pagination .page-link:hover {
+                                    background-color: #fffbf0;
+                                    color: #7a4500;
+                                    transform: translateY(-2px);
+                                }
+                                .custom-pagination .page-item.disabled .page-link {
+                                    background-color: transparent;
+                                    color: #e9ecef;
+                                    cursor: not-allowed;
+                                }
+                            `}
+                        </style>
+                        <Pagination className="mb-0 align-items-center">
+                            <Pagination.First onClick={() => handlePageChange(1)} disabled={currentPage === 1} />
+                            <Pagination.Prev onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} />
+
+                            {/* First Page */}
+                            {totalPages > 0 && (
+                                <Pagination.Item active={1 === currentPage} onClick={() => handlePageChange(1)}>
+                                    1
+                                </Pagination.Item>
+                            )}
+
+                            {/* Start Ellipsis */}
+                            {currentPage > 3 && totalPages > 5 && <Pagination.Ellipsis disabled />}
+
+                            {/* Middle Pages */}
+                            {(() => {
+                                const pages = [];
+                                let start = Math.max(2, currentPage - 1);
+                                let end = Math.min(totalPages - 1, currentPage + 1);
+
+                                if (totalPages > 5) {
+                                    if (currentPage <= 3) {
+                                        end = 4;
+                                        start = 2;
+                                    }
+                                    if (currentPage >= totalPages - 2) {
+                                        start = totalPages - 3;
+                                        end = totalPages - 1;
+                                    }
+                                } else {
+                                    start = 2;
+                                    end = totalPages - 1;
+                                }
+
+                                for (let number = start; number <= end; number++) {
+                                    if (number > 1 && number < totalPages) {
+                                        pages.push(
+                                            <Pagination.Item key={number} active={number === currentPage} onClick={() => handlePageChange(number)}>
+                                                {number}
+                                            </Pagination.Item>
+                                        );
+                                    }
+                                }
+                                return pages;
+                            })()}
+
+                            {/* End Ellipsis */}
+                            {currentPage < totalPages - 2 && totalPages > 5 && <Pagination.Ellipsis disabled />}
+
+                            {/* Last Page */}
+                            {totalPages > 1 && (
+                                <Pagination.Item active={totalPages === currentPage} onClick={() => handlePageChange(totalPages)}>
+                                    {totalPages}
+                                </Pagination.Item>
+                            )}
+
+                            <Pagination.Next onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} />
+                            <Pagination.Last onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages} />
+                        </Pagination>
+                    </div>
                 )}
             </Card>
             {/* Confirmation Modal */}
@@ -1917,6 +2039,48 @@ const MerchantSubscribers = ({ merchantId, user, showHeader = true }) => {
                         {submittingSettlement ? 'Processing...' : 'Confirm Settlement'}
                     </Button>
                 </Modal.Footer>
+            </Modal>
+
+            {/* Settlement Success Modal */}
+            <Modal show={settlementSuccessModal.show} onHide={() => setSettlementSuccessModal({ show: false, subscriber: null, settlementData: null })} centered>
+                <Modal.Body className="text-center p-5">
+                    <div className="mx-auto rounded-circle d-flex align-items-center justify-content-center mb-4"
+                        style={{ width: '80px', height: '80px', backgroundColor: '#d4edda', color: '#28a745', border: '3px solid #28a745' }}>
+                        <i className="fas fa-check-circle fa-3x"></i>
+                    </div>
+
+                    <h4 className="fw-bold mb-3" style={{ color: '#915200' }}>Settlement Successful!</h4>
+                    <p className="text-muted mb-4">
+                        You have successfully settled the withdrawal request for <strong>{settlementSuccessModal.subscriber?.user?.name}</strong>.
+                        <br />
+                        Amount: <strong className="text-success">₹{settlementSuccessModal.settlementData?.amount}</strong>
+                    </p>
+
+                    <div className="d-grid gap-3 col-10 mx-auto">
+                        <Button
+                            variant="outline-light"
+                            onClick={() => {
+                                if (settlementSuccessModal.subscriber && settlementSuccessModal.settlementData) {
+                                    generateSettlementReceipt(settlementSuccessModal.subscriber, settlementSuccessModal.settlementData);
+                                }
+                            }}
+                            className="fw-bold py-2"
+                            style={{ borderColor: '#915200', color: '#915200' }}
+                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#915200'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#915200'; }}
+                        >
+                            <i className="fas fa-file-download me-2"></i>Download Settlement Receipt
+                        </Button>
+
+                        <Button
+                            onClick={() => setSettlementSuccessModal({ show: false, subscriber: null, settlementData: null })}
+                            className="fw-bold py-2"
+                            style={{ backgroundColor: '#915200', borderColor: '#915200' }}
+                        >
+                            OK
+                        </Button>
+                    </div>
+                </Modal.Body>
             </Modal>
         </div>
     );

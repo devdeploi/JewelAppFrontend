@@ -364,7 +364,7 @@ const MerchantRegister = ({ onRegister, onSwitchToLogin }) => {
 
             // 2. Initialize Razorpay
             const options = {
-                key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_S6RoMCiZCpsLo7",
+                key: process.env.RAZORPAY_KEY_ID,
                 amount: order.amount,
                 currency: order.currency,
                 name: "Aurum Jewellery",

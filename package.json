@@ -11,6 +11,7 @@
     "axios": "^1.13.2",
     "bootstrap": "^5.3.8",
     "chart.js": "^4.5.1",
+    "dotenv": "^17.2.4",
     "icons": "^1.0.0",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",

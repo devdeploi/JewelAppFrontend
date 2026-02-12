@@ -13,7 +13,7 @@ const LandingPage = () => {
     const handleShow = () => setShowOffcanvas(true);
 
     const handleComingSoonClose = () => setShowComingSoon(false);
-    const handleComingSoonShow = () => setShowComingSoon(true);
+    // const handleComingSoonShow = () => setShowComingSoon(true);
 
     // Brand Colors
     const brandColor = '#915200'; // Primary Bronze/Brown
@@ -142,9 +142,9 @@ const LandingPage = () => {
                                     className="px-4 ms-lg-3 fw-bold mt-3 mt-lg-0"
                                     style={{ backgroundColor: brandColor, borderColor: brandColor }}
                                     onClick={() => {
-                                        // navigate('/register');
-                                        handleComingSoonShow();
-                                        handleClose();
+                                        navigate('/register');
+                                        // handleComingSoonShow();
+                                        // handleClose();
                                     }}
                                 >
                                     Register
@@ -188,8 +188,8 @@ const LandingPage = () => {
                                     size="lg"
                                     className="fw-bold px-5 rounded-pill shadow hover-scale"
                                     style={{ backgroundColor: brandColor, borderColor: brandColor }}
-                                    // onClick={() => navigate('/register')}
-                                    onClick={handleComingSoonShow}
+                                    onClick={() => navigate('/register')}
+                                // onClick={handleComingSoonShow}
                                 >
                                     Get Started
                                 </Button>
@@ -685,8 +685,8 @@ const LandingPage = () => {
                                 background: `linear-gradient(135deg, ${brandColor} 0%, ${goldColor} 100%)`,
                                 transition: 'all 0.3s ease'
                             }}
-                            // onClick={() => navigate('/register')}
-                            onClick={handleComingSoonShow}
+                            onClick={() => navigate('/register')}
+                        // onClick={handleComingSoonShow}
                         >
                             <span className="position-relative z-1 d-flex align-items-center">
                                 Start Your Application <i className="fas fa-arrow-right ms-2"></i>
@@ -1029,8 +1029,8 @@ const LandingPage = () => {
                                                 color: plan.recommended ? 'white' : '#333',
                                                 transition: 'all 0.3s ease'
                                             }}
-                                            // onClick={() => navigate('/register')}
-                                            onClick={handleComingSoonShow}
+                                            onClick={() => navigate('/register')}
+                                        // onClick={handleComingSoonShow}
                                         >
                                             <span className="position-relative z-2">Get Started</span>
                                             {plan.recommended && (

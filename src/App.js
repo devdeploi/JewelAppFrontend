@@ -86,7 +86,7 @@ function App() {
   console.log("current user", currentUser);
 
 
-  useAutoLogout(handleLogout, 10 * 60 * 1000, !!userRole); // 5 minutes
+  useAutoLogout(handleLogout, 15 * 60 * 1000, !!userRole); // 15 minutes
 
   return (
     <Router>

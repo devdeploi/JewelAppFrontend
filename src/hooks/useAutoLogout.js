@@ -1,9 +1,9 @@
 import { useEffect, useRef, useCallback } from 'react';
 
-const FIVE_MINUTES = 5 * 60 * 1000;
+const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
 
-const useAutoLogout = (onLogout, timeout = FIVE_MINUTES, isActive = true) => {
+const useAutoLogout = (onLogout, timeout = FIFTEEN_MINUTES, isActive = true) => {
     const timerRef = useRef(null);
     const onLogoutRef = useRef(onLogout);
 

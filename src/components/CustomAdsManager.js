@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Modal, Form, Badge, Row, Col, Spinner, InputGroup } from 'react-bootstrap';
+import { Modal, Form, Badge, Row, Col } from 'react-bootstrap';
 import axios from 'axios';
 import { APIURL } from '../utils/Function';
 import CustomWebAlert from './CustomWebAlert';
@@ -20,7 +20,6 @@ const CustomAdsManager = ({ user }) => {
     const [description, setDescription] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [displayFrequency, setDisplayFrequency] = useState(15);
     const [error, setError] = useState('');
 
     // Alert State
@@ -79,7 +78,6 @@ const CustomAdsManager = ({ user }) => {
         setDescription(ad.description || '');
         setStartDate(ad.startDate.split('T')[0]);
         setEndDate(ad.endDate.split('T')[0]);
-        setDisplayFrequency(ad.displayFrequency || 15);
         setExistingImages(ad.imageUrls || [ad.imageUrl]);
         setImageFiles([]);
         setPreviewUrls([]);
@@ -124,7 +122,7 @@ const CustomAdsManager = ({ user }) => {
                 description,
                 startDate,
                 endDate,
-                displayFrequency
+                displayFrequency: 15
             };
 
             if (editingAd) {
@@ -157,7 +155,6 @@ const CustomAdsManager = ({ user }) => {
         setDescription('');
         setStartDate('');
         setEndDate('');
-        setDisplayFrequency(15);
         setError('');
     };
 
@@ -198,325 +195,396 @@ const CustomAdsManager = ({ user }) => {
         });
     };
 
+    const calculateProgress = (ad) => {
+        if (!ad.startDate || !ad.endDate) return 0;
+        const start = new Date(ad.startDate).getTime();
+        const end = new Date(ad.endDate).getTime();
+        const now = new Date().getTime();
+        if (now < start) return 0;
+        if (now > end) return 100;
+        return Math.round(((now - start) / (end - start)) * 100);
+    };
+
+    const getDaysRemaining = (ad) => {
+        if (!ad.endDate) return 0;
+        const end = new Date(ad.endDate);
+        const now = new Date();
+        const diffTime = end - now;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays > 0 ? diffDays : 0;
+    };
+
+    // Get the active ad (only one allowed)
+    const activeAd = ads.length > 0 ? ads[0] : null;
+
     return (
-        <div className="container-fluid py-4" style={{ minHeight: '80vh' }}>
+        <div className="container-fluid py-3" style={{ minHeight: '80vh' }}>
             <style>
                 {`
-                    .ad-card {
-                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                        border: 1px solid rgba(212, 175, 55, 0.1) !important;
+                    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap');
+                    
+                    .ad-master-card {
+                        background: #ffffff;
+                        border: 1px solid rgba(212, 175, 55, 0.15);
+                        border-radius: 20px;
+                        overflow: hidden;
+                        position: relative;
+                        box-shadow: 0 15px 40px rgba(212, 175, 55, 0.08); /* Soft gold shadow */
+                        transition: transform 0.3s ease, box-shadow 0.3s ease;
                     }
-                    .ad-card:hover {
-                        transform: translateY(-8px);
-                        box-shadow: 0 15px 35px rgba(212, 175, 55, 0.15) !important;
+
+                    .ad-master-card:hover {
+                        transform: translateY(-2px);
+                         box-shadow: 0 20px 50px rgba(212, 175, 55, 0.12);
                     }
-                    .gold-gradient-btn {
-                        background: linear-gradient(90deg, #ebdc87 0%, #e2d183 100%) !important;
-                        border: 1px solid #915200 !important;
-                        color: #915200 !important;
+                    
+                    .luxury-gradient-text {
+                        background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                        background-clip: text;
+                        color: #d4af37;
+                    }
+                    
+                    .glass-effect {
+                        background: rgba(255, 255, 255, 0.9);
+                        backdrop-filter: blur(8px);
+                        border: 1px solid rgba(0, 0, 0, 0.03);
+                    }
+                    
+                    .cta-button {
+                        background: linear-gradient(90deg, #ebdc87 0%, #e2d183 100%);
+                        border: 1px solid #915200;
+                        color: #915200;
+                        font-weight: 700;
+                        padding: 0.6rem 1.4rem;
+                        border-radius: 50rem;
                         transition: all 0.3s ease;
+                        font-family: 'Inter', sans-serif;
+                         box-shadow: 0 4px 15px rgba(212, 175, 55, 0.25);
                     }
-                    .gold-gradient-btn:hover {
-                        transform: scale(1.05);
-                        opacity: 0.95;
-                        box-shadow: 0 5px 15px rgba(145, 82, 0, 0.2);
+                    
+                    .cta-button:hover {
+                        transform: translateY(-1px);
+                        box-shadow: 0 6px 20px rgba(212, 175, 55, 0.35);
+                        background: linear-gradient(90deg, #e2d183 0%, #ebdc87 100%);
                     }
-                    .glass-modal .modal-content {
-                        background: rgba(255, 255, 255, 0.95);
-                        backdrop-filter: blur(10px);
-                        border: 1px solid rgba(212, 175, 55, 0.2);
+
+                    .image-container {
+                        height: 280px;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        position: relative;
+                        background: #f8f9fa;
+                        box-shadow: inset 0 0 20px rgba(0,0,0,0.03);
                     }
-                    .custom-badge-active {
-                        background: linear-gradient(45deg, #059669, #10b981);
-                        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+                    
+                    .image-container img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        transition: transform 0.5s ease;
                     }
-                    .custom-badge-inactive {
-                        background: linear-gradient(45deg, #4b5563, #6b7280);
+
+                    .image-container:hover img {
+                         transform: scale(1.02);
                     }
-                    .extra-small {
-                        font-size: 0.75rem !important;
+
+                    .progress-gold {
+                        height: 8px;
+                        background: #f0f0f0;
+                        border-radius: 4px;
+                        overflow: hidden;
+                    }
+
+                    .progress-bar-gold {
+                        background: linear-gradient(90deg, #d4af37, #f4e4a6);
+                        height: 100%;
+                        border-radius: 4px;
+                    }
+
+                    .stat-box {
+                        background: #fff;
+                        border: 1px solid rgba(0,0,0,0.04);
+                        border-radius: 12px;
+                        padding: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+                        text-align: center;
+                        height: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        justify-content: center;
+                    }
+
+                    /* Typography */
+                    .font-serif { fontFamily: 'Playfair Display', serif; }
+                    .font-sans { fontFamily: 'Inter', sans-serif; }
+                    .text-dark-primary { color: #1a1a1a; }
+                    .text-dark-secondary { color: #5a5a5a; }
+                    
+                    /* Form Overrides */
+                    .form-control {
+                        background-color: #fbfbfb;
+                        border: 1px solid #e0e0e0;
+                        color: #1a1a1a;
+                        padding: 0.6rem 1rem;
+                        border-radius: 8px;
+                    }
+                    .form-control:focus {
+                        background-color: #fff;
+                        border-color: #d4af37;
+                        box-shadow: 0 0 0 0.25rem rgba(212, 175, 55, 0.1);
+                        color: #000;
+                    }
+                    .form-label {
+                        color: #444;
+                        font-weight: 500;
+                        font-size: 0.9rem;
+                    }
+                    
+                    /* Custom Scrollbar for image list */
+                     .custom-scroll::-webkit-scrollbar {
+                        height: 6px;
+                    }
+                    .custom-scroll::-webkit-scrollbar-track {
+                        background: #f1f1f1;
+                    }
+                    .custom-scroll::-webkit-scrollbar-thumb {
+                        background: #ddd; 
+                        border-radius: 3px;
                     }
                 `}
             </style>
 
-            <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-                <div>
-                    <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>Ad Campaigns</h5>
-                    <p className="text-muted extra-small mb-0">Manage your custom promotions and customer reach</p>
-                </div>
-                {ads.length === 0 && (
-                    <Button
-                        className="gold-gradient-btn px-3 py-1.5 rounded-pill fw-bold shadow-sm d-flex align-items-center small"
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <div className="d-flex align-items-center">
+                        <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #f3e9bd 0%, #ebdc87 100%)', color: '#915200' }}>
+                            <i className="fas fa-ad fa-lg"></i>
+                        </div>
+                        <div>
+                            <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>My Campaigns</h5>
+                            <small className="text-muted">Manage your exclusive brand promotions.</small>
+                        </div>
+                    </div>
+                {!activeAd && (
+                    <button
+                        className="cta-button"
                         onClick={() => { resetForm(); setShowModal(true); }}
                     >
-                        <i className="fas fa-plus-circle me-1 fs-6"></i> Create New
-                    </Button>
+                        <i className="fas fa-plus me-2"></i>New Campaign
+                    </button>
                 )}
             </div>
 
             {loading ? (
                 <div className="text-center py-5">
-                    <Spinner animation="border" style={{ color: '#d4af37' }} />
-                    <p className="mt-3 text-muted">Retrieving your campaigns...</p>
+                    <div className="spinner-border text-warning" role="status"></div>
                 </div>
-            ) : ads.length === 0 ? (
-                <Card className="text-center py-5 border-0 rounded-4 shadow-sm bg-white overflow-hidden position-relative">
-                    <div className="position-absolute opacity-10" style={{ top: '-20%', right: '-10%', fontSize: '15rem', transform: 'rotate(-15deg)' }}>
-                        <i className="fas fa-ad"></i>
+            ) : !activeAd ? (
+                <div className="text-center py-5 bg-white rounded-4 border border-1 shadow-sm">
+                    <div className="display-4 text-warning mb-3 opacity-50">
+                        <i className="fas fa-bullhorn"></i>
                     </div>
-                    <Card.Body className="py-5 position-relative z-1">
-                        <div className="mb-4 bg-light d-inline-block rounded-circle p-4">
-                            <i className="fas fa-bullhorn fa-4x" style={{ color: '#d4af37' }}></i>
-                        </div>
-                        <h4 className="fw-bold">No Campaigns Active</h4>
-                        <p className="text-muted mx-auto" style={{ maxWidth: '400px' }}>
-                            You haven't created any custom ads yet. Launch a campaign today to boost your visibility and engagement!
-                        </p>
-                        <Button className="gold-gradient-btn rounded-pill px-4" onClick={() => setShowModal(true)}>
-                            Get Started Now
-                        </Button>
-                    </Card.Body>
-                </Card>
+                    <h4 className="text-dark font-serif">No Active Campaign</h4>
+                    <p className="text-muted small">Launch a premium advertisement to reach your audience.</p>
+                </div>
             ) : (
-                <Row xs={1} sm={2} md={3} lg={4} className="g-3">
-                    {ads.map(ad => (
-                        <Col key={ad._id}>
-                            <Card className="ad-card h-100 border-0 shadow-sm rounded-3 overflow-hidden">
-                                <div style={{ height: '140px', overflow: 'hidden', position: 'relative' }}>
-                                    <div className="position-absolute w-100 h-100 z-1" style={{ background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.3))' }}></div>
-                                    <Card.Img
-                                        variant="top"
-                                        src={`${APIURL.replace('/api', '')}${ad.imageUrls?.[0] || ad.imageUrl}`}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                    />
-
-                                    <div className="position-absolute top-0 start-0 m-2 z-2">
-                                        <Badge style={{ fontSize: '0.65rem' }} className={`rounded-pill px-2 py-1 shadow-sm border-0 ${ad.isActive ? 'custom-badge-active' : 'custom-badge-inactive'}`}>
-                                            {ad.isActive ? 'LIVE' : 'PAUSED'}
-                                        </Badge>
+                <div className="ad-master-card p-4">
+                    <Row className="g-4 align-items-center">
+                        <Col lg={5}>
+                            <div className="image-container shadow-sm border border-light">
+                                <img
+                                    src={`${APIURL.replace('/api', '')}${activeAd.imageUrls?.[0] || activeAd.imageUrl}`}
+                                    alt="Ad Visual"
+                                />
+                                <Badge bg={activeAd.isActive ? 'success' : 'secondary'} className="position-absolute top-2 start-2 shadow-sm">
+                                    {activeAd.isActive ? 'LIVE' : 'PAUSED'}
+                                </Badge>
+                                {activeAd.imageUrls?.length > 1 && (
+                                    <Badge bg="light" text="dark" className="position-absolute bottom-2 end-2 opacity-90 shadow-sm border">
+                                        +{activeAd.imageUrls.length - 1} more
+                                    </Badge>
+                                )}
+                            </div>
+                        </Col>
+                        <Col lg={7}>
+                            <div className="h-100 d-flex flex-column">
+                                <div className="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h3 className="text-dark-primary fw-bold mb-2 font-serif">{activeAd.title}</h3>
+                                        <p className="text-dark-secondary small mb-0 font-sans" style={{ maxWidth: '450px' }}>
+                                            {activeAd.description}
+                                        </p>
                                     </div>
-
-                                    {ad.imageUrls?.length > 1 && (
-                                        <div className="position-absolute top-0 end-0 m-2 z-2">
-                                            <Badge bg="dark" style={{ fontSize: '0.65rem' }} className="rounded-pill opacity-75 d-flex align-items-center gap-1">
-                                                <i className="fas fa-images"></i> {ad.imageUrls.length}
-                                            </Badge>
-                                        </div>
-                                    )}
-
-                                    <div className="position-absolute bottom-0 start-0 m-2 z-2 text-white">
-                                        <span className="fw-bold extra-small"><i className="fas fa-clock me-1"></i>Every {ad.displayFrequency || 15}m</span>
+                                    <div className="d-flex gap-2">
+                                        <button
+                                            className="btn btn-outline-dark btn-sm rounded-pill px-3"
+                                            onClick={() => handleEditClick(activeAd)}
+                                        >
+                                            <i className="fas fa-pen small"></i>
+                                        </button>
+                                        <button
+                                            className="btn btn-outline-danger btn-sm rounded-pill px-3"
+                                            onClick={() => handleDelete(activeAd._id)}
+                                        >
+                                            <i className="fas fa-trash small"></i>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <Card.Body className="p-3">
-                                    <h6 className="fw-bold mb-1 text-dark text-truncate">{ad.title || 'Special Promotion'}</h6>
-                                    <p className="text-secondary mb-2 text-truncate small">
-                                        {ad.description || 'Premium jewelry collections.'}
-                                    </p>
-
-                                    <div className="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
-                                        <div className="text-start">
-                                            <small className="text-muted d-block extra-small text-uppercase fw-bold">Starts</small>
-                                            <span className="fw-bold extra-small">{new Date(ad.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                                        </div>
-                                        <div className="text-end">
-                                            <small className="text-muted d-block extra-small text-uppercase fw-bold">Ends</small>
-                                            <span className="fw-bold extra-small">{new Date(ad.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                <div className="row g-3 mb-4">
+                                    <div className="col-4">
+                                        <div className="stat-box">
+                                            <small className="text-muted d-block text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '1px' }}>Start Date</small>
+                                            <span className="text-dark-primary fw-bold small">
+                                                {new Date(activeAd.startDate).toLocaleDateString()}
+                                            </span>
                                         </div>
                                     </div>
-
-                                    <div className="d-flex gap-1 mt-auto">
-                                        <Button
-                                            variant="outline-dark"
-                                            className="flex-grow-1 rounded-pill fw-bold border-1 py-1 extra-small"
-                                            onClick={() => handleEditClick(ad)}
-                                        >
-                                            Edit
-                                        </Button>
-                                        <Button
-                                            variant={ad.isActive ? 'outline-warning' : 'outline-success'}
-                                            onClick={() => handleToggleStatus(ad)}
-                                            className="rounded-pill px-2 py-1 extra-small fw-bold"
-                                        >
-                                            {ad.isActive ? 'Pause' : 'Play'}
-                                        </Button>
-                                        <Button
-                                            variant="outline-danger"
-                                            className="rounded-pill px-2 py-1 extra-small fw-bold"
-                                            onClick={() => handleDelete(ad._id)}
-                                        >
-                                            <i className="fas fa-trash-alt"></i>
-                                        </Button>
+                                    <div className="col-4">
+                                        <div className="stat-box">
+                                            <small className="text-muted d-block text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '1px' }}>End Date</small>
+                                            <span className="text-dark-primary fw-bold small">
+                                                {new Date(activeAd.endDate).toLocaleDateString()}
+                                            </span>
+                                        </div>
                                     </div>
-                                </Card.Body>
-                            </Card>
+                                    <div className="col-4">
+                                        <div className="stat-box">
+                                            <small className="text-muted d-block text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '1px' }}>Duration</small>
+                                            <span className="text-dark-primary fw-bold small">{getDaysRemaining(activeAd)} Days Left</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-auto">
+                                    <div className="d-flex justify-content-between mb-2">
+                                        <span className="text-muted small">Campaign Progress</span>
+                                        <span className="text-warning fw-bold small">{calculateProgress(activeAd)}%</span>
+                                    </div>
+                                    <div className="progress-gold mb-3">
+                                        <div
+                                            className="progress-bar-gold"
+                                            style={{ width: `${calculateProgress(activeAd)}%` }}
+                                        ></div>
+                                    </div>
+
+                                    <div className="d-flex gap-3">
+                                        <button
+                                            className={`btn flex-grow-1 py-2 fw-semibold ${activeAd.isActive ? 'btn-outline-warning text-dark' : 'cta-button'}`}
+                                            style={activeAd.isActive ? { borderColor: '#d4af37' } : {}}
+                                            onClick={() => handleToggleStatus(activeAd)}
+                                        >
+                                            <i className={`fas ${activeAd.isActive ? 'fa-pause' : 'fa-play'} me-2`}></i>
+                                            {activeAd.isActive ? 'Pause Campaign' : 'Resume Campaign'}
+                                        </button>
+                                        {activeAd.link && (
+                                            <a
+                                                href={activeAd.link}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="btn btn-outline-dark flex-grow-1 py-2"
+                                            >
+                                                Preview Link <i className="fas fa-external-link-alt ms-2 small"></i>
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </Col>
-                    ))}
-                </Row>
+                    </Row>
+                </div>
             )}
 
-            {/* Create/Edit Ad Modal */}
+            {/* Light Themed Modal */}
             <Modal
                 show={showModal}
                 onHide={() => setShowModal(false)}
                 centered
-                backdrop="static"
                 size="lg"
-                className="glass-modal"
+                backdrop="static"
             >
-                <Modal.Header closeButton className="border-0 px-4 pt-3 pb-0">
-                    <Modal.Title className="fw-bold fs-5">
-                        {editingAd ? 'Refine Campaign' : 'New Campaign'}
+                <Modal.Header closeButton className="border-0 pb-0">
+                    <Modal.Title className="text-dark font-serif h4">
+                        {editingAd ? 'Edit Campaign' : 'New Campaign'}
                     </Modal.Title>
                 </Modal.Header>
-                <Modal.Body className="px-4 pb-4 pt-2">
-                    {error && <div className="alert alert-danger border-0 rounded-3 shadow-sm py-2 mb-4 d-flex align-items-center">
-                        <i className="fas fa-exclamation-circle me-2"></i> {error}
-                    </div>}
+                <Modal.Body className="p-4 pt-2">
+                    <p className="text-muted small mb-4">Fill in the details below to launch your advertisement.</p>
 
                     <Form onSubmit={handleCreateOrUpdateAd}>
-                        <Row className="g-3">
-                            <Col lg={12}>
-                                <div className="bg-light p-3 rounded-3 border">
-                                    <Form.Label className="extra-small fw-bold mb-2 d-flex align-items-center text-dark">
-                                        <i className="fas fa-images me-2 text-warning"></i> Imagery (Up to 5)
-                                    </Form.Label>
+                        {error && <div className="alert alert-danger py-2 small mb-3 shadow-sm border-0">{error}</div>}
 
-                                    <div className="d-flex flex-wrap gap-2 mb-2">
-                                        {/* Existing Images */}
-                                        {existingImages.map((url, i) => (
-                                            <div key={`exist-${i}`} className="position-relative rounded-3 overflow-hidden border-2 border-white shadow-sm" style={{ width: 60, height: 60 }}>
-                                                <img src={`${APIURL.replace('/api', '')}${url}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                <div
-                                                    className="position-absolute top-0 end-0 bg-danger text-white d-flex align-items-center justify-content-center shadow"
-                                                    style={{ width: 18, height: 18, cursor: 'pointer', borderRadius: '0 0 0 8px' }}
-                                                    onClick={() => handleRemoveExistingImage(i)}
-                                                >
-                                                    <small style={{ fontSize: '10px' }} className="fw-bold">×</small>
-                                                </div>
-                                            </div>
-                                        ))}
-
-                                        {/* New Previews */}
-                                        {previewUrls.map((url, i) => (
-                                            <div key={i} className="rounded-3 overflow-hidden border-2 border-white shadow-sm" style={{ width: 60, height: 60 }}>
-                                                <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            </div>
-                                        ))}
-
-                                        {(existingImages.length + imageFiles.length < 5) && (
-                                            <label className="border-2 border-dashed border-warning rounded-3 d-flex flex-column align-items-center justify-content-center cursor-pointer shadow-sm hover-bg-light transition" style={{ width: 60, height: 60, cursor: 'pointer' }}>
-                                                <i className="fas fa-plus text-warning extra-small"></i>
-                                                <input type="file" className="d-none" accept="image/*" multiple onChange={handleFileChange} />
-                                            </label>
-                                        )}
-                                    </div>
-                                    <small className="text-muted fst-italic extra-small">Landscape images work best.</small>
+                        <div className="row g-3">
+                            <div className="col-12">
+                                <Form.Label>Visual Gallery (Max 5)</Form.Label>
+                                <div className="d-flex gap-2 overflow-auto pb-2 p-2 rounded bg-light border custom-scroll">
+                                    {existingImages.map((url, i) => (
+                                        <div key={`exist-${i}`} className="position-relative flex-shrink-0" style={{ width: 80, height: 80 }}>
+                                            <img src={`${APIURL.replace('/api', '')}${url}`} alt="" className="rounded w-100 h-100 object-fit-cover shadow-sm" />
+                                            <button type="button" className="btn btn-danger btn-sm p-0 position-absolute top-0 end-0 rounded-circle shadow-sm" style={{ width: 20, height: 20, lineHeight: 1, transform: 'translate(40%, -40%)' }} onClick={() => handleRemoveExistingImage(i)}>×</button>
+                                        </div>
+                                    ))}
+                                    {previewUrls.map((url, i) => (
+                                        <div key={`new-${i}`} className="position-relative flex-shrink-0" style={{ width: 80, height: 80 }}>
+                                            <img src={url} alt="" className="rounded w-100 h-100 object-fit-cover shadow-sm" />
+                                        </div>
+                                    ))}
+                                    {(existingImages.length + imageFiles.length < 5) && (
+                                        <label className="btn btn-light d-flex flex-column align-items-center justify-content-center flex-shrink-0 border-dashed border-2" style={{ width: 80, height: 80, borderStyle: 'dashed', borderColor: '#ccc' }}>
+                                            <i className="fas fa-plus text-muted mb-1"></i>
+                                            <span className="text-muted small" style={{ fontSize: '0.7rem' }}>Add New</span>
+                                            <input type="file" className="d-none" accept="image/*" multiple onChange={handleFileChange} />
+                                        </label>
+                                    )}
                                 </div>
-                            </Col>
+                            </div>
 
-                            <Col md={6}>
+                            <div className="col-md-7">
                                 <Form.Group>
-                                    <Form.Label className="extra-small fw-bold text-dark">Headline</Form.Label>
-                                    <Form.Control
-                                        className="rounded-3 border-light shadow-sm py-1.5 small"
-                                        type="text"
-                                        placeholder="Headline"
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        required
-                                    />
+                                    <Form.Label>Headline</Form.Label>
+                                    <Form.Control type="text" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Grand Sale" />
                                 </Form.Group>
-                            </Col>
-
-                            <Col md={6}>
+                            </div>
+                            <div className="col-md-5">
                                 <Form.Group>
-                                    <Form.Label className="extra-small fw-bold text-dark">Freq (Mins)</Form.Label>
-                                    <InputGroup size="sm">
-                                        <InputGroup.Text className="bg-white border-light shadow-sm"><i className="fas fa-clock text-warning"></i></InputGroup.Text>
-                                        <Form.Control
-                                            className="rounded-end-3 border-light shadow-sm py-1.5"
-                                            type="number"
-                                            placeholder="15"
-                                            value={displayFrequency}
-                                            onChange={(e) => setDisplayFrequency(e.target.value)}
-                                            min="1"
-                                            required
-                                        />
-                                    </InputGroup>
+                                    <Form.Label>Link (Optional)</Form.Label>
+                                    <Form.Control type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." />
                                 </Form.Group>
-                            </Col>
-
-                            <Col lg={12}>
+                            </div>
+                            <div className="col-12">
                                 <Form.Group>
-                                    <Form.Label className="extra-small fw-bold text-dark">Description</Form.Label>
-                                    <Form.Control
-                                        as="textarea"
-                                        rows={2}
-                                        className="rounded-3 border-light shadow-sm small"
-                                        placeholder="Description..."
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                    />
+                                    <Form.Label>Description</Form.Label>
+                                    <Form.Control as="textarea" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Briefly describe your campaign..." style={{ resize: 'none' }} />
                                 </Form.Group>
-                            </Col>
-
-                            <Col lg={12}>
+                            </div>
+                            <div className="col-6">
                                 <Form.Group>
-                                    <Form.Label className="extra-small fw-bold text-dark">Target Link</Form.Label>
-                                    <Form.Control
-                                        className="rounded-3 border-light shadow-sm py-1.5 small"
-                                        type="text"
-                                        placeholder="URL"
-                                        value={link}
-                                        onChange={(e) => setLink(e.target.value)}
-                                    />
+                                    <Form.Label>Start Date</Form.Label>
+                                    <Form.Control type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required />
                                 </Form.Group>
-                            </Col>
-
-                            <Col md={6}>
+                            </div>
+                            <div className="col-6">
                                 <Form.Group>
-                                    <Form.Label className="extra-small fw-bold text-dark">Start</Form.Label>
-                                    <Form.Control
-                                        className="rounded-3 border-light shadow-sm py-1.5 small"
-                                        type="date"
-                                        value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
-                                        required
-                                    />
+                                    <Form.Label>End Date</Form.Label>
+                                    <Form.Control type="date" value={endDate} onChange={e => setEndDate(e.target.value)} required />
                                 </Form.Group>
-                            </Col>
+                            </div>
+                        </div>
 
-                            <Col md={6}>
-                                <Form.Group>
-                                    <Form.Label className="extra-small fw-bold text-dark">End</Form.Label>
-                                    <Form.Control
-                                        className="rounded-3 border-light shadow-sm py-1.5 small"
-                                        type="date"
-                                        value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        required
-                                    />
-                                </Form.Group>
-                            </Col>
-                        </Row>
-
-                        <div className="d-grid mt-4">
-                            <Button
-                                type="submit"
-                                disabled={uploading}
-                                className="gold-gradient-btn fw-bold py-2.5 rounded-pill shadow w-100"
-                            >
-                                {uploading ? (
-                                    <><Spinner size="sm" animation="border" className="me-2" /> Launching...</>
-                                ) : (
-                                    <>
-                                        <i className={`fas ${editingAd ? 'fa-check-circle' : 'fa-rocket'} me-2`}></i>
-                                        {editingAd ? 'Update Campaign Details' : 'Launch New Campaign'}
-                                    </>
-                                )}
-                            </Button>
+                        <div className="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+                            <div className="text-muted small">
+                                <i className="fas fa-clock text-warning me-1"></i>
+                                Display Frequency: <span className="fw-semibold text-dark">15 minutes</span>
+                            </div>
+                            <div className="d-flex gap-2">
+                                <button type="button" className="btn btn-light border" onClick={() => setShowModal(false)}>Cancel</button>
+                                <button type="submit" className="cta-button" disabled={uploading}>
+                                    {uploading ? <span className="spinner-border spinner-border-sm me-2"></span> : <i className="fas fa-rocket me-2"></i>}
+                                    {editingAd ? 'Save Changes' : 'Launch Campaign'}
+                                </button>
+                            </div>
                         </div>
                     </Form>
                 </Modal.Body>

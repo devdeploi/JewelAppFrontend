@@ -13,6 +13,37 @@ const MerchantProfile = ({ merchantData }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [merchantUpgradeCycle, setMerchantUpgradeCycle] = useState('yearly');
     const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [selectedUpgradePlan, setSelectedUpgradePlan] = useState(null);
+
+    const PRICING = {
+        Standard: {
+            monthly: 2360,
+            yearly: 23600,
+            baseMonthly: 2000,
+            baseYearly: 20000,
+            limit: 6,
+            benefits: [
+                "Create up to 6 Chit Plans",
+                "Basic Analytics",
+                "Email Support",
+                "Standard Dashboard"
+            ]
+        },
+        Premium: {
+            monthly: 4130,
+            yearly: 41300,
+            baseMonthly: 3500,
+            baseYearly: 35000,
+            limit: 9,
+            benefits: [
+                "Create up to 9 Chit Plans",
+                "Advanced Analytics & Trends",
+                "Priority 24/7 Support",
+                "Custom Ads Manager",
+                "iOS App Access"
+            ]
+        }
+    };
 
     // Custom Alert State
     const [alertState, setAlertState] = useState({
@@ -195,21 +226,34 @@ const MerchantProfile = ({ merchantData }) => {
     const [showDowngradeModal, setShowDowngradeModal] = useState(false);
     const standardLimit = 3;
 
+    const handleUpgradeClick = () => {
+        const currentPlan = data.plan || 'Basic';
+        if (currentPlan === 'Basic' || !currentPlan) {
+            setSelectedUpgradePlan(null); // Force selection
+        } else if (currentPlan === 'Standard') {
+            setSelectedUpgradePlan('Premium'); // Only option is Premium
+        }
+        setShowUpgradeModal(true);
+    };
+
     const handleUpgradePayment = async () => {
+        if (!selectedUpgradePlan) return;
+
         try {
-            // 1. Create Order
-            const amount = merchantUpgradeCycle === 'yearly' ? 41300 : 4130; // 35000 + 18% GST
+            const pricing = PRICING[selectedUpgradePlan];
+            const amount = merchantUpgradeCycle === 'yearly' ? pricing.yearly : pricing.monthly;
+
             const { data: order } = await axios.post(`${APIURL}/payments/create-subscription-order`, {
-                amount: amount // Premium Plan Price
+                amount: amount
             });
 
             // 2. Initialize Razorpay
             const options = {
-                key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_S6RoMCiZCpsLo7", // Correct key matching backend
+                key: process.env.RAZORPAY_KEY_ID, // Correct key matching backend
                 amount: order.amount,
                 currency: order.currency,
                 name: "Aurum Jewellery",
-                description: "Upgrade to Premium Plan",
+                description: `Upgrade to ${selectedUpgradePlan} Plan`,
                 order_id: order.id,
                 handler: async function (response) {
                     // 3. Verify Payment
@@ -221,8 +265,8 @@ const MerchantProfile = ({ merchantData }) => {
                         });
 
                         if (verifyRes.data.status === 'success') {
-                            // 4. Update Profile to Premium
-                            await upgradeToPremium(response.razorpay_payment_id);
+                            // 4. Update Profile
+                            await upgradePlan(response.razorpay_payment_id);
                         } else {
                             showAlert("Payment verification failed", "danger", "Payment Error");
                         }
@@ -246,7 +290,7 @@ const MerchantProfile = ({ merchantData }) => {
                 showAlert(response.error.description, "danger", "Payment Failed");
             });
 
-            // Safety Delay before opening Razorpay (same as mobile app)
+            // Safety Delay before opening Razorpay
             setTimeout(() => {
                 rzp1.open();
             }, 2000);
@@ -257,25 +301,25 @@ const MerchantProfile = ({ merchantData }) => {
         }
     };
 
-    const upgradeToPremium = async (paymentId) => {
+    const upgradePlan = async (paymentId) => {
         try {
             const user = JSON.parse(localStorage.getItem('user'));
             const config = { headers: { Authorization: `Bearer ${user?.token}` } };
 
-            // Update plan to Premium
-            const updatePayload = { ...data, plan: 'Premium', billingCycle: merchantUpgradeCycle, paymentId };
+            // Update plan to Selected
+            const updatePayload = { ...data, plan: selectedUpgradePlan, billingCycle: merchantUpgradeCycle, paymentId };
             const { data: updatedMerchant } = await axios.put(`${APIURL}/merchants/${data._id}`, updatePayload, config);
             console.log(updatedMerchant);
 
             setData(updatedMerchant);
-            showAlert("Payment Successful! Upgraded to Premium Plan.", "success", "Upgrade Successful");
+            showAlert(`Payment Successful! Upgraded to ${selectedUpgradePlan} Plan.`, "success", "Upgrade Successful");
             setShowUpgradeModal(false);
 
-            // Optionally update localStorage user if it stores plan
+            // Update localStorage
             const storedUser = JSON.parse(localStorage.getItem('user'));
             if (storedUser) {
-                storedUser.plan = 'Premium';
-                localStorage.setItem('user', JSON.stringify(storedUser));
+                const updatedUser = { ...storedUser, ...updatedMerchant };
+                localStorage.setItem('user', JSON.stringify(updatedUser)); // Fix: Ensure complete user object is saved
             }
         } catch (error) {
             console.error(error);
@@ -328,7 +372,7 @@ const MerchantProfile = ({ merchantData }) => {
             const user = JSON.parse(localStorage.getItem('user'));
 
             const options = {
-                key: order.keyId || process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_S6RoMCiZCpsLo7", // keyId might come from create-renewal-order response
+                key: order.keyId || process.env.RAZORPAY_KEY_ID, // keyId might come from create-renewal-order response
                 amount: order.order.amount,
                 currency: order.order.currency,
                 name: "Aurum Jewellery",
@@ -918,7 +962,7 @@ const MerchantProfile = ({ merchantData }) => {
                                                     cursor: 'pointer',
                                                     transition: 'all 0.3s ease'
                                                 }}
-                                                onClick={() => setShowUpgradeModal(true)}
+                                                onClick={handleUpgradeClick}
                                                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,249,196,0.5)'}
                                                 onMouseLeave={(e) => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255,249,196,0.3) 0%, rgba(255,255,255,0.4) 100%)'}
                                             >
@@ -1012,7 +1056,7 @@ const MerchantProfile = ({ merchantData }) => {
                                     )} */}
                                         {data.plan !== 'Premium' && (
                                             <Button
-                                                onClick={() => setShowUpgradeModal(true)}
+                                                onClick={handleUpgradeClick}
                                                 size="lg"
                                                 className="fw-bold text-white px-4 rounded-pill d-flex align-items-center gap-2 position-relative overflow-hidden"
                                                 style={{
@@ -1095,52 +1139,122 @@ const MerchantProfile = ({ merchantData }) => {
 
             {/* Upgrade Modal */}
             <div className={`modal fade ${showUpgradeModal ? 'show d-block' : ''}`} style={{ background: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-                <div className="modal-dialog modal-dialog-centered">
-                    <div className="modal-content border-0 shadow-lg">
-                        <div className="modal-header border-0 bg-warning bg-opacity-10">
-                            <h5 className="modal-title fw-bold text-warning-emphasis"><i className="fas fa-crown me-2"></i>Upgrade to Premium</h5>
+                <div className="modal-dialog modal-dialog-centered modal-lg">
+                    <div className="modal-content border-0 shadow-lg" style={{ borderRadius: '20px', overflow: 'hidden' }}>
+                        <div className="modal-header border-0 bg-white pt-4 px-4 pb-0">
+                            {(!selectedUpgradePlan && (data.plan === 'Basic' || !data.plan)) && <h4 className="fw-bold mb-0 text-dark">Select Your Upgrade</h4>}
+                            {selectedUpgradePlan && (data.plan === 'Basic' || !data.plan) && (
+                                <button className='btn btn-light btn-sm rounded-circle me-2' onClick={() => setSelectedUpgradePlan(null)}>
+                                    <i className="fas fa-arrow-left"></i>
+                                </button>
+                            )}
                             <button type="button" className="btn-close" onClick={() => setShowUpgradeModal(false)}></button>
                         </div>
-                        <div className="modal-body text-center p-4">
-                            <div className="mb-3">
-                                <img src="/images/AURUM.png" alt="Logo" className="mb-3" style={{ height: '60px' }} />
-                                <h3 className="fw-bold">Premium Benefits</h3>
-                                <ul className="list-unstyled text-start mx-auto mt-3" style={{ maxWidth: '300px' }}>
-                                    <li className="mb-2"><i className="fas fa-check-circle text-success me-2"></i>iOS App Access</li>
-                                    <li className="mb-2"><i className="fas fa-check-circle text-success me-2"></i>9 Chit Plan</li>
-                                    <li className="mb-2"><i className="fas fa-check-circle text-success me-2"></i>Custom Ads</li>
-                                    <li className="mb-2"><i className="fas fa-check-circle text-success me-2"></i>Payment Filter (Date)</li>
-                                    <li className="mb-2"><i className="fas fa-check-circle text-success me-2"></i>Priority Support</li>
-                                </ul>
-                                <hr />
-                                <div className="d-flex justify-content-center gap-2 mb-3 mt-4">
+                        <div className="modal-body p-4">
+                            {!selectedUpgradePlan ? (
+                                // Plan Selection UI
+                                <div>
+                                    <div className="d-flex justify-content-center gap-2 mb-4">
+                                        <Button
+                                            variant={merchantUpgradeCycle === 'monthly' ? 'dark' : 'outline-dark'}
+                                            size="sm"
+                                            className="rounded-pill px-4 fw-bold"
+                                            onClick={() => setMerchantUpgradeCycle('monthly')}
+                                        >
+                                            Monthly
+                                        </Button>
+                                        <Button
+                                            variant={merchantUpgradeCycle === 'yearly' ? 'dark' : 'outline-dark'}
+                                            size="sm"
+                                            className="rounded-pill px-4 fw-bold"
+                                            onClick={() => setMerchantUpgradeCycle('yearly')}
+                                        >
+                                            Yearly <Badge bg="success" className="ms-1">-17%</Badge>
+                                        </Button>
+                                    </div>
+                                    <Row className="g-4 justify-content-center">
+                                        {Object.entries(PRICING).map(([planName, details]) => {
+                                            const price = merchantUpgradeCycle === 'yearly' ? details.yearly : details.monthly;
+                                            return (
+                                                <Col md={6} key={planName}>
+                                                    <Card className={`h-100 border-2 ${planName === 'Premium' ? 'border-warning' : 'border-secondary'} shadow-sm text-center card-hover overflow-hidden`} style={{ borderRadius: '20px' }}>
+                                                        {planName === 'Premium' && <div className="bg-warning text-dark fw-bold small py-1">MOST POPULAR</div>}
+                                                        <Card.Body className="p-4 d-flex flex-column">
+                                                            <h3 className="fw-bold mb-2">{planName}</h3>
+                                                            <div className="mb-3">
+                                                                <span className="display-6 fw-bold">₹{price.toLocaleString()}</span><span className="text-muted fs-6">/{merchantUpgradeCycle === 'yearly' ? 'yr' : 'mo'}</span>
+                                                            </div>
+                                                            <ul className="list-unstyled text-start mb-4 flex-grow-1">
+                                                                {details.benefits.map((benefit, i) => (
+                                                                    <li key={i} className="mb-2 text-muted detail-item"><i className="fas fa-check-circle text-success me-2"></i>{benefit}</li>
+                                                                ))}
+                                                            </ul>
+                                                            <Button
+                                                                variant={planName === 'Premium' ? 'dark' : 'outline-dark'}
+                                                                className="w-100 py-2 rounded-pill fw-bold"
+                                                                onClick={() => setSelectedUpgradePlan(planName)}
+                                                                style={planName === 'Premium' ? { background: 'linear-gradient(90deg, #915200 0%, #d4af37 100%)', border: 'none' } : {}}
+                                                            >
+                                                                Select {planName}
+                                                            </Button>
+                                                        </Card.Body>
+                                                    </Card>
+                                                </Col>
+                                            );
+                                        })}
+                                    </Row>
+                                </div>
+                            ) : (
+                                // Payment View
+                                <div className="text-center">
+                                    <img src="/images/AURUM.png" alt="Logo" className="mb-3" style={{ height: '60px' }} />
+                                    <h3 className="fw-bold">{selectedUpgradePlan} Plan</h3>
+                                    <p className="text-muted">Complete your payment to upgrade</p>
+
+                                    {/* Cycle Selection */}
+                                    <div className="d-flex justify-content-center gap-2 mb-4 p-1 bg-light rounded-pill d-inline-flex border">
+                                        <Button
+                                            variant={merchantUpgradeCycle === 'monthly' ? 'white' : 'light'}
+                                            className={`rounded-pill px-4 fw-bold ${merchantUpgradeCycle === 'monthly' ? 'shadow-sm text-dark' : 'text-muted'}`}
+                                            onClick={() => setMerchantUpgradeCycle('monthly')}
+                                        >
+                                            Monthly
+                                        </Button>
+                                        <Button
+                                            variant={merchantUpgradeCycle === 'yearly' ? 'white' : 'light'}
+                                            className={`rounded-pill px-4 fw-bold ${merchantUpgradeCycle === 'yearly' ? 'shadow-sm text-dark' : 'text-muted'}`}
+                                            onClick={() => setMerchantUpgradeCycle('yearly')}
+                                        >
+                                            Yearly <Badge bg="success" className="ms-1">-17%</Badge>
+                                        </Button>
+                                    </div>
+
+                                    <Card className="border-0 bg-light p-4 rounded-4 mb-4 mx-auto" style={{ maxWidth: '400px' }}>
+                                        <div className="d-flex justify-content-between align-items-center mb-2">
+                                            <span className="text-muted">Base Price</span>
+                                            <span className="fw-bold">₹{(PRICING[selectedUpgradePlan][merchantUpgradeCycle === 'yearly' ? 'baseYearly' : 'baseMonthly']).toLocaleString()}</span>
+                                        </div>
+                                        <div className="d-flex justify-content-between align-items-center mb-3">
+                                            <span className="text-muted">GST (18%)</span>
+                                            <span className="fw-bold">₹{((PRICING[selectedUpgradePlan][merchantUpgradeCycle === 'yearly' ? 'baseYearly' : 'baseMonthly']) * 0.18).toLocaleString()}</span>
+                                        </div>
+                                        <hr />
+                                        <div className="d-flex justify-content-between align-items-center">
+                                            <span className="fw-bold fs-5">Total Pay</span>
+                                            <span className="fw-bold fs-4 text-success">₹{(PRICING[selectedUpgradePlan][merchantUpgradeCycle]).toLocaleString()}</span>
+                                        </div>
+                                    </Card>
+
                                     <Button
-                                        variant={merchantUpgradeCycle === 'monthly' ? 'warning' : 'outline-secondary'}
-                                        size="sm"
-                                        className="fw-bold rounded-pill"
-                                        onClick={() => setMerchantUpgradeCycle('monthly')}
+                                        size="lg"
+                                        className="px-5 rounded-pill fw-bold text-white shadow-lg"
+                                        onClick={handleUpgradePayment}
+                                        style={{ background: 'linear-gradient(90deg, #915200 0%, #d4af37 100%)', border: 'none' }}
                                     >
-                                        Monthly
-                                    </Button>
-                                    <Button
-                                        variant={merchantUpgradeCycle === 'yearly' ? 'warning' : 'outline-secondary'}
-                                        size="sm"
-                                        className="fw-bold rounded-pill"
-                                        onClick={() => setMerchantUpgradeCycle('yearly')}
-                                    >
-                                        Yearly (Save ₹7,000)
+                                        Proceed to Pay
                                     </Button>
                                 </div>
-                                <div className="display-6 fw-bold text-success">
-                                    {merchantUpgradeCycle === 'yearly' ? '₹41,300' : '₹4,130'}
-                                    <span className="fs-6 text-muted">/{merchantUpgradeCycle === 'yearly' ? 'year' : 'month'} <span className="text-danger small">(Incl. 18% GST)</span></span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="modal-footer border-0 justify-content-center pb-4">
-                            <Button variant="dark" className="px-5 rounded-pill fw-bold" onClick={handleUpgradePayment}>
-                                Pay & Upgrade
-                            </Button>
+                            )}
                         </div>
                     </div>
                 </div>

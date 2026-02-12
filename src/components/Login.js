@@ -125,6 +125,8 @@ const Login = ({ onLogin, onRegisterClick }) => {
             await axios.post(`${APIURL}/merchants/send-login-otp`, { email });
             setMerchantLoginStep(2); // Move to OTP entry
             setResendTimer(60);
+            // Optional: Show success message if you had a state for it
+            // alert(data.message); // Or use a toast. Keeping it simple as step change is visual feedback.
         } catch (error) {
             console.error(error);
             setError(error.response?.data?.message || 'Failed to send OTP. Check if email is registered.');

@@ -149,18 +149,29 @@ const MerchantList = ({ mode = 'admin' }) => {
     };
 
     return (
-        <div className="custom-table-container">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h5 className="fw-semibold mb-0" style={{ color: "#915200" }}>
-                    <i className="fas fa-store me-2"></i>
-                    Merchant Directory
-                </h5>
-                <div className="d-flex gap-2">
+        <div className="custom-table-container p-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            {/* Header Section */}
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 bg-white p-4 rounded-4 shadow-sm border border-light">
+                <div className="d-flex align-items-center mb-3 mb-md-0">
+                    <div className="icon-box me-3 bg-light rounded-circle d-flex align-items-center justify-content-center" style={{ width: '50px', height: '50px' }}>
+                        <i className="fas fa-store fa-lg" style={{ color: "#D4AF37" }}></i>
+                    </div>
+                    <div>
+                        <h4 className="fw-bold mb-0 text-dark">Merchant Directory</h4>
+                        <small className="text-muted">Manage and view all registered merchants</small>
+                    </div>
+                </div>
+
+                <div className="d-flex gap-3 flex-wrap">
                     {mode !== 'public' && (
-                        <select className="form-select" onChange={e => {
-                            setPage(1);
-                            setFilters({ ...filters, status: e.target.value });
-                        }}>
+                        <select
+                            className="form-select border-0 bg-light fw-medium"
+                            style={{ width: '150px', boxShadow: 'none' }}
+                            onChange={e => {
+                                setPage(1);
+                                setFilters({ ...filters, status: e.target.value });
+                            }}
+                        >
                             <option value="">All Status</option>
                             <option value="Pending">Pending</option>
                             <option value="Approved">Approved</option>
@@ -168,104 +179,130 @@ const MerchantList = ({ mode = 'admin' }) => {
                         </select>
                     )}
                     {mode !== 'public' && (
-                        <select className="form-select" onChange={e => {
-                            setPage(1);
-                            setFilters({ ...filters, subscriptionStatus: e.target.value });
-                        }}>
+                        <select
+                            className="form-select border-0 bg-light fw-medium"
+                            style={{ width: '180px', boxShadow: 'none' }}
+                            onChange={e => {
+                                setPage(1);
+                                setFilters({ ...filters, subscriptionStatus: e.target.value });
+                            }}
+                        >
                             <option value="">All Subscriptions</option>
                             <option value="active">Active</option>
                             <option value="expired">Expired</option>
                             <option value="cancelled">Cancelled</option>
                         </select>
                     )}
-                    <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Search..."
-                        onChange={e => {
-                            setPage(1);
-                            setFilters({ ...filters, search: e.target.value });
-                        }}
-                    />
+                    <div className="position-relative">
+                        <i className="fas fa-search position-absolute text-muted" style={{ top: '12px', left: '15px' }}></i>
+                        <input
+                            type="text"
+                            className="form-control ps-5 border-0 bg-light"
+                            placeholder="Search merchants..."
+                            style={{ width: '250px', boxShadow: 'none' }}
+                            onChange={e => {
+                                setPage(1);
+                                setFilters({ ...filters, search: e.target.value });
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
 
             {merchantsList && merchantsList.length > 0 ? (
-                <>
-                    <Table responsive hover className="custom-table mb-0">
-                        <thead>
+                <div className="bg-white rounded-4 shadow-sm border border-light overflow-hidden">
+                    <Table hover className="align-middle mb-0 custom-table">
+                        <thead className="text-white" style={{ background: 'linear-gradient(90deg, #D4AF37, #C5A028)' }}>
                             <tr>
-                                <th>Image</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Plan</th>
-                                {mode !== 'public' && <th>Status</th>}
-                                {mode !== 'public' && <th>Action</th>}
+                                <th className="py-3 ps-4 text-uppercase small fw-bold" style={{ letterSpacing: '1px', borderBottom: 'none' }}>Merchant</th>
+                                <th className="py-3 text-uppercase small fw-bold" style={{ letterSpacing: '1px', borderBottom: 'none' }}>Contact Detail</th>
+                                <th className="py-3 text-uppercase small fw-bold" style={{ letterSpacing: '1px', borderBottom: 'none' }}>Active Plan</th>
+                                {mode !== 'public' && <th className="py-3 text-uppercase small fw-bold" style={{ letterSpacing: '1px', borderBottom: 'none' }}>Current Status</th>}
+                                {mode !== 'public' && <th className="py-3 pe-4 text-end text-uppercase small fw-bold" style={{ letterSpacing: '1px', borderBottom: 'none' }}>Actions</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {merchantsList.map((merchant) => (
-                                <tr key={merchant._id}>
-                                    <td onClick={() => handleRowClick(merchant)} style={{ cursor: 'pointer' }}>
-                                        {merchant.shopImages && merchant.shopImages.length > 0 ?
-                                            <img src={`${APIURL.replace('/api', '')}${merchant.shopImages[0]}`} alt="Shop" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} /> :
-                                            <i className="fas fa-store fa-2x text-muted"></i>
-                                        }
-                                    </td>
-                                    <td className="fw-bold" onClick={() => handleRowClick(merchant)} style={{ cursor: 'pointer', color: '#915200' }}>{merchant.name}</td>
-                                    <td>{merchant.email}</td>
-                                    <td>
-                                        <span className={`badge-custom ${merchant.plan === 'Premium' ? 'badge-premium' : 'badge-standard'}`}>
-                                            {merchant.plan === 'Premium' && <i className="fas fa-crown me-1 text-warning"></i>}
-                                            {merchant.plan}
-                                        </span>
-                                        {/* Expiry Indicator */}
-                                        {merchant.subscriptionExpiryDate && (
-                                            <div className="small text-muted mt-1" style={{ fontSize: '0.75rem' }}>
-                                                {(() => {
-                                                    const expiry = new Date(merchant.subscriptionExpiryDate);
-                                                    const today = new Date();
-                                                    const diffTime = expiry - today;
-                                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                                                    if (diffDays < 0 || merchant.subscriptionStatus === 'expired') return <span className="text-danger fw-bold">Expired</span>;
-                                                    if (diffDays <= 7) return <span className="text-warning fw-bold">Expiring in {diffDays}d</span>;
-                                                    return <span>Active ({diffDays}d left)</span>;
-                                                })()}
+                                <tr key={merchant._id} style={{ transition: 'all 0.2s' }}>
+                                    <td className="ps-4 py-3" onClick={() => handleRowClick(merchant)} style={{ cursor: 'pointer' }}>
+                                        <div className="d-flex align-items-center">
+                                            <div className="position-relative">
+                                                {merchant.shopImages && merchant.shopImages.length > 0 ?
+                                                    <img
+                                                        src={`${APIURL.replace('/api', '')}${merchant.shopImages[0]}`}
+                                                        alt="Shop"
+                                                        className="rounded-circle shadow-sm border border-white"
+                                                        style={{ width: 48, height: 48, objectFit: 'cover' }}
+                                                    /> :
+                                                    <div className="rounded-circle bg-light d-flex align-items-center justify-content-center shadow-sm" style={{ width: 48, height: 48 }}>
+                                                        <i className="fas fa-store text-muted"></i>
+                                                    </div>
+                                                }
+                                                <span className={`position-absolute bottom-0 end-0 p-1 rounded-circle border border-white ${merchant.status === 'Approved' ? 'bg-success' : merchant.status === 'Pending' ? 'bg-warning' : 'bg-danger'}`} style={{ width: '12px', height: '12px' }}></span>
                                             </div>
-                                        )}
+                                            <div className="ms-3">
+                                                <h6 className="mb-0 fw-bold text-dark">{merchant.name}</h6>
+                                                {/* <small className="text-muted" style={{ fontSize: '0.75rem' }}>ID: {merchant._id.substring(merchant._id.length - 6).toUpperCase()}</small> */}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="py-3" onClick={() => handleRowClick(merchant)} style={{ cursor: 'pointer' }}>
+                                        <div className="d-flex flex-column">
+                                            <span className="text-dark fw-medium mb-1"><i className="far fa-envelope me-2 text-muted"></i>{merchant.email}</span>
+                                            {merchant.phone && <span className="text-muted small"><i className="fas fa-phone me-2 text-muted"></i>{merchant.phone}</span>}
+                                        </div>
+                                    </td>
+                                    <td className="py-3">
+                                        <div className="d-flex flex-column align-items-start">
+                                            <Badge
+                                                className={`px-3 py-2 rounded-pill fw-medium mb-1 ${merchant.plan === 'Premium' ? 'bg-gradient-gold text-white' : 'bg-light text-dark border'}`}
+                                                style={merchant.plan === 'Premium' ? { background: 'linear-gradient(45deg, #D4AF37, #C5A028)' } : {}}
+                                            >
+                                                {merchant.plan === 'Premium' && <i className="fas fa-crown me-1"></i>}
+                                                {merchant.plan}
+                                            </Badge>
+
+                                            {merchant.subscriptionExpiryDate && (
+                                                <small className="text-muted" style={{ fontSize: '0.75rem' }}>
+                                                    {(() => {
+                                                        const expiry = new Date(merchant.subscriptionExpiryDate);
+                                                        const today = new Date();
+                                                        const diffTime = expiry - today;
+                                                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                                        if (diffDays < 0 || merchant.subscriptionStatus === 'expired') return <span className="text-danger fw-bold"><i className="fas fa-exclamation-circle me-1"></i>Expired</span>;
+                                                        if (diffDays <= 7) return <span className="text-warning fw-bold"><i className="fas fa-clock me-1"></i>Expiring in {diffDays}d</span>;
+                                                        return <span className="text-success"><i className="fas fa-check-circle me-1"></i>Active ({diffDays}d)</span>;
+                                                    })()}
+                                                </small>
+                                            )}
+                                        </div>
                                     </td>
                                     {mode !== 'public' && (
-                                        <td>
-                                            <Badge bg={merchant.status === 'Approved' ? 'success' : merchant.status === 'Rejected' ? 'danger' : 'warning'}>
+                                        <td className="py-3">
+                                            <Badge bg={merchant.status === 'Approved' ? 'success' : merchant.status === 'Rejected' ? 'danger' : 'warning'} pill className="px-3 py-2">
                                                 {merchant.status || 'Pending'}
                                             </Badge>
                                         </td>
                                     )}
                                     {mode !== 'public' && (
-                                        <td>
-                                            <div className="d-flex gap-2">
+                                        <td className="py-3 pe-4 text-end">
+                                            <div className="d-flex justify-content-end gap-2">
                                                 {merchant.status === 'Pending' && (
                                                     <>
-                                                        <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Approve')}>Approve</Button>
-                                                        <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Reject')}>Reject</Button>
+                                                        <Button variant="success" size="sm" className="btn-action rounded-pill px-3" onClick={() => triggerAction(merchant, 'Approve')}><i className="fas fa-check me-1"></i>Approve</Button>
+                                                        <Button variant="danger" size="sm" className="btn-action rounded-pill px-3" onClick={() => triggerAction(merchant, 'Reject')}><i className="fas fa-times me-1"></i>Reject</Button>
                                                     </>
                                                 )}
                                                 {merchant.status === 'Approved' && (
                                                     <>
-                                                        <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Reject')}>Reject</Button>
-                                                        <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Pending')}>Pending</Button>
+                                                        <Button variant="outline-danger" size="sm" className="rounded-pill px-3" onClick={() => triggerAction(merchant, 'Reject')}>Reject</Button>
+                                                        <Button variant="outline-warning" size="sm" className="rounded-pill px-3" onClick={() => triggerAction(merchant, 'Pending')}>Pending</Button>
                                                     </>
                                                 )}
                                                 {merchant.status === 'Rejected' && (
-                                                    <>
-                                                        <Button size="sm" style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => triggerAction(merchant, 'Approve')}>Approve</Button>
-                                                        {/* <Button size="sm" variant="outline-dark" style={{ borderColor: '#915200', color: '#915200' }} onClick={() => triggerAction(merchant, 'Pending')}>Pending</Button> */}
-                                                    </>
+                                                    <Button variant="outline-success" size="sm" className="rounded-pill px-3" onClick={() => triggerAction(merchant, 'Approve')}>Approve</Button>
                                                 )}
-                                                {/* <Button size="sm" variant="danger" className="text-white p-0 ms-2" onClick={() => triggerAction(merchant, 'Delete')}>
-                                                    <i className="fas fa-trash"></i>
-                                                </Button> */}
                                             </div>
                                         </td>
                                     )}
@@ -275,142 +312,175 @@ const MerchantList = ({ mode = 'admin' }) => {
                     </Table>
 
                     {totalPages > 1 && (
-                        <div className="d-flex justify-content-center mt-3">
-                            <Pagination>
+                        <div className="d-flex justify-content-center py-4 border-top">
+                            <Pagination className="custom-pagination">
                                 <Pagination.First onClick={() => setPage(1)} disabled={page === 1} />
                                 <Pagination.Prev onClick={() => setPage(page - 1)} disabled={page === 1} />
-                                <Pagination.Item disabled>{`${page} / ${totalPages}`}</Pagination.Item>
+                                <Pagination.Item active>{page}</Pagination.Item>
                                 <Pagination.Next onClick={() => setPage(page + 1)} disabled={page === totalPages} />
                                 <Pagination.Last onClick={() => setPage(totalPages)} disabled={page === totalPages} />
                             </Pagination>
                         </div>
                     )}
-                </>
+                </div>
             ) : (
-                <div className="text-center py-5 bg-light rounded">
-                    <i className="fas fa-store-slash fa-3x text-muted mb-3"></i>
-                    <h5 className="text-secondary">No Merchants Found</h5>
-                    {/* <p className="text-muted small">Try adjusting your search or filters.</p> */}
+                <div className="text-center py-5 bg-white rounded-4 shadow-sm border border-light mt-4">
+                    <div className="mb-3">
+                        <div className="d-inline-flex align-items-center justify-content-center bg-light rounded-circle" style={{ width: '80px', height: '80px' }}>
+                            <i className="fas fa-search fa-2x text-muted"></i>
+                        </div>
+                    </div>
+                    <h5 className="text-dark fw-bold">No Merchants Found</h5>
+                    <p className="text-muted">Try adjusting your filters or search query.</p>
                 </div>
             )}
 
             {/* Merchant Details Modal */}
-            <Modal show={showModal} onHide={handleClose} size="lg" centered>
-                <Modal.Header closeButton style={{ backgroundColor: '#915200', color: '#fff' }}>
-                    <Modal.Title><i className="fas fa-store me-2"></i>Merchant Details</Modal.Title>
+            <Modal show={showModal} onHide={handleClose} size="xl" centered contentClassName="border-0 rounded-4 overflow-hidden shadow-lg">
+                <Modal.Header closeButton className="border-0 text-white" style={{ background: 'linear-gradient(135deg, #915200, #D4AF37)' }}>
+                    <Modal.Title className="fw-bold"><i className="fas fa-store-alt me-2"></i>Merchant Profile</Modal.Title>
                 </Modal.Header>
-                <Modal.Body className="bg-light">
+                <Modal.Body className="bg-light p-0" style={{ height: '75vh', overflow: 'hidden' }}>
                     {selectedMerchant && (
-                        <Row>
-                            {/* Left Column: Details */}
-                            <Col md={4} className="mb-3 mb-md-0">
-                                <div className="p-3 bg-white rounded shadow-sm h-100">
-                                    <div className="text-center">
+                        <Row className="g-0 h-100">
+                            {/* Left Column: Profile & Details - Independent Scroll */}
+                            <Col md={4} className="bg-white border-end position-relative h-100" style={{ overflowY: 'auto' }}>
+                                <div className="p-4 text-center">
+                                    <div className="position-relative d-inline-block mb-3">
                                         {selectedMerchant.shopImages && selectedMerchant.shopImages.length > 0 ? (
                                             <img
                                                 src={`${APIURL.replace('/api', '')}${selectedMerchant.shopImages[0]}`}
                                                 alt="Shop"
-                                                className="mb-3 border border-3"
-                                                style={{ width: '120px', height: '120px', objectFit: 'cover', borderRadius: '50%', borderColor: '#915200' }}
+                                                className="rounded-circle shadow border border-3 border-warning"
+                                                style={{ width: '140px', height: '140px', objectFit: 'cover' }}
                                             />
                                         ) : (
-                                            <div className="mb-3 d-inline-flex align-items-center justify-content-center bg-light border border-3" style={{ width: '120px', height: '120px', borderRadius: '50%', borderColor: '#915200' }}>
+                                            <div className="rounded-circle bg-light d-flex align-items-center justify-content-center shadow border border-3 border-warning" style={{ width: '140px', height: '140px' }}>
                                                 <i className="fas fa-store fa-3x text-secondary"></i>
                                             </div>
                                         )}
-                                        <h5 className="fw-bold text-dark">{selectedMerchant.name}</h5>
-                                        <p className="text-secondary mb-2 small">{selectedMerchant.email}</p>
+                                        <Badge
+                                            bg={selectedMerchant.status === 'Approved' ? 'success' : selectedMerchant.status === 'Rejected' ? 'danger' : 'warning'}
+                                            className="position-absolute bottom-0 end-0 rounded-circle p-2 border border-2 border-white"
+                                            style={{ width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                            <i className={`fas fa-${selectedMerchant.status === 'Approved' ? 'check' : selectedMerchant.status === 'Rejected' ? 'times' : 'clock'}`}></i>
+                                        </Badge>
+                                    </div>
 
-                                        <div className="mb-3">
-                                            <span className={`badge-custom ${selectedMerchant.plan === 'Premium' ? 'badge-premium' : 'badge-standard'} me-2`}>
-                                                {selectedMerchant.plan}
-                                            </span>
-                                            {mode !== 'public' && (
-                                                <Badge bg={selectedMerchant.status === 'Approved' ? 'success' : selectedMerchant.status === 'Rejected' ? 'danger' : 'warning'}>
-                                                    {selectedMerchant.status}
-                                                </Badge>
-                                            )}
+                                    <h4 className="fw-bold text-dark mb-1">{selectedMerchant.name}</h4>
+                                    <p className="text-secondary mb-3"><i className="far fa-envelope me-2"></i>{selectedMerchant.email}</p>
+
+                                    <div className="d-flex justify-content-center gap-2 mb-4">
+                                        <Badge
+                                            className={`px-3 py-2 rounded-pill fw-medium ${selectedMerchant.plan === 'Premium' ? 'bg-gradient-gold text-white' :
+                                                selectedMerchant.plan === 'Standard' ? 'bg-secondary text-white' :
+                                                    'bg-light text-dark border'
+                                                }`}
+                                            style={selectedMerchant.plan === 'Premium' ? { background: 'linear-gradient(45deg, #D4AF37, #C5A028)' } : {}}
+                                        >
+                                            {selectedMerchant.plan === 'Premium' && <i className="fas fa-crown me-1"></i>}
+                                            {selectedMerchant.plan} Plan
+                                        </Badge>
+                                    </div>
+
+                                    <div className="text-start bg-light p-3 rounded-3 mb-3">
+                                        <div className="d-flex align-items-center mb-2">
+                                            <div className="icon-sm bg-white rounded p-1 me-2 text-warning"><i className="fas fa-phone fa-sm"></i></div>
+                                            <span className="small fw-medium">{selectedMerchant.phone || 'N/A'}</span>
+                                        </div>
+                                        <div className="d-flex align-items-center mb-2">
+                                            <div className="icon-sm bg-white rounded p-1 me-2 text-warning"><i className="fas fa-map-marker-alt fa-sm"></i></div>
+                                            <span className="small fw-medium text-truncate">{selectedMerchant.address || 'N/A'}</span>
+                                        </div>
+                                        <div className="d-flex align-items-center">
+                                            <div className="icon-sm bg-white rounded p-1 me-2 text-warning"><i className="fas fa-calendar-alt fa-sm"></i></div>
+                                            <span className="small fw-medium">Joined {new Date(selectedMerchant.createdAt).toLocaleDateString()}</span>
                                         </div>
                                     </div>
 
-                                    <div className="text-start mt-3 pt-3 border-top small">
-                                        <div className="mb-2"><strong>Phone:</strong> {selectedMerchant.phone || 'N/A'}</div>
-                                        <div className="mb-2"><strong>Address:</strong> {selectedMerchant.address || 'N/A'}</div>
-                                        <div className="mb-2"><strong>Joined:</strong> {new Date(selectedMerchant.createdAt).toLocaleDateString()}</div>
+                                    <div className="text-start">
+                                        <h6 className="fw-bold text-uppercase text-secondary small mb-3" style={{ letterSpacing: '1px' }}>Subscription Details</h6>
 
-                                        <hr className="my-2" />
-
-                                        <p className="mb-1 fw-bold text-dark">Subscription:</p>
-                                        <div className="mb-2">
+                                        <div className="mb-3">
+                                            <small className="d-block text-muted mb-1">Expiry Date</small>
                                             {selectedMerchant.subscriptionExpiryDate ? (
-                                                <>
-                                                    {new Date(selectedMerchant.subscriptionExpiryDate).toLocaleDateString()}
-                                                    {new Date(selectedMerchant.subscriptionExpiryDate) < new Date() && <Badge bg="danger" className="ms-1">Expired</Badge>}
-                                                </>
-                                            ) : 'N/A'}
+                                                <div className="d-flex align-items-center">
+                                                    <span className="fw-bold text-dark me-2">{new Date(selectedMerchant.subscriptionExpiryDate).toLocaleDateString()}</span>
+                                                    {new Date(selectedMerchant.subscriptionExpiryDate) < new Date() && <Badge bg="danger" className="rounded-pill">Expired</Badge>}
+                                                </div>
+                                            ) : <span className="text-dark fw-medium">N/A</span>}
                                         </div>
 
-                                        <hr className="my-2" />
-
-                                        <p className="mb-1 fw-bold text-dark">GSTIN:</p>
-                                        <div className="mb-2">{selectedMerchant.gstin || 'N/A'}</div>
+                                        <div className="mb-3">
+                                            <small className="d-block text-muted mb-1">GSTIN</small>
+                                            <span className="fw-bold text-dark font-monospace">{selectedMerchant.gstin || 'N/A'}</span>
+                                        </div>
 
                                         {selectedMerchant.addressProof && (
-                                            <div className="mt-2">
-                                                <p className="mb-1 fw-bold">Address Proof:</p>
-                                                <Button
-                                                    variant="outline-secondary"
-                                                    size="sm"
-                                                    className="w-100"
-                                                    onClick={() => handleDownload(
-                                                        `${APIURL.replace('/api', '')}${selectedMerchant.addressProof}`,
-                                                        `AddressProof_${selectedMerchant.name.replace(/\s+/g, '_')}.jpg`
-                                                    )}
-                                                >
-                                                    <i className="fas fa-download me-1"></i> Download
-                                                </Button>
-                                            </div>
+                                            <Button
+                                                variant="outline-dark"
+                                                size="sm"
+                                                className="w-100 rounded-pill mt-2"
+                                                onClick={() => handleDownload(
+                                                    `${APIURL.replace('/api', '')}${selectedMerchant.addressProof}`,
+                                                    `AddressProof_${selectedMerchant.name.replace(/\s+/g, '_')}.jpg`
+                                                )}
+                                            >
+                                                <i className="fas fa-file-download me-2"></i>Download Address Proof
+                                            </Button>
                                         )}
                                     </div>
                                 </div>
                             </Col>
 
-                            {/* Right Column: Key Metrics & Chits */}
-                            <Col md={8}>
-                                <div className="bg-white p-3 rounded shadow-sm h-100">
-                                    <h5 className="mb-3 pb-2 border-bottom" style={{ color: '#915200' }}>
-                                        <i className="fas fa-file-invoice-dollar me-2"></i>Active Chit Plans
-                                    </h5>
+                            {/* Right Column: Chits & Activity - Independent Scroll */}
+                            <Col md={8} className="bg-light h-100" style={{ overflowY: 'auto' }}>
+                                <div className="p-4 h-100 d-flex flex-column">
+                                    <div className="d-flex justify-content-between align-items-center mb-4">
+                                        <h5 className="fw-bold m-0" style={{ color: '#915200' }}>Active Chit Plans</h5>
+                                        <Badge bg="warning" text="dark" pill className="px-3">Total: {merchantChits.length}</Badge>
+                                    </div>
 
                                     {merchantChits.length > 0 ? (
-                                        <div style={{ maxHeight: '500px', overflowY: 'auto', paddingRight: '5px' }}>
-                                            {merchantChits.map(chit => (
-                                                <div key={chit._id} className="p-3 mb-3 bg-light rounded border position-relative">
-                                                    <div className="d-flex justify-content-between align-items-center mb-1">
-                                                        <h6 className="fw-bold text-dark mb-0">{chit.planName}</h6>
-                                                        <Badge bg="secondary" className="text-white">
-                                                            {chit.subscribers ? chit.subscribers.length : 0} Subscribers
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="small text-muted mb-2">{chit.description}</p>
+                                        <div className="flex-grow-1 overflow-auto pe-2 custom-scrollbar">
+                                            <Row className="g-3">
+                                                {merchantChits.map(chit => (
+                                                    <Col md={6} key={chit._id}>
+                                                        <div className="card h-100 border-0 shadow-sm hover-elevate transition-all">
+                                                            <div className="card-body">
+                                                                <div className="d-flex justify-content-between align-items-start mb-2">
+                                                                    <div className="rounded-circle bg-warning bg-opacity-10 p-2 d-flex align-items-center justify-content-center" style={{ width: 40, height: 40 }}>
+                                                                        <i className="fas fa-piggy-bank text-warning"></i>
+                                                                    </div>
+                                                                    <Badge bg="dark" className="rounded-pill">{chit.durationMonths} Months</Badge>
+                                                                </div>
+                                                                <h6 className="fw-bold text-dark mb-1">{chit.planName}</h6>
+                                                                <p className="text-secondary small mb-3 text-truncate">{chit.description}</p>
 
-                                                    <div className="row g-2 small">
-                                                        <div className="col-6">
-                                                            <div className="text-muted">Monthly</div>
-                                                            <div className="fw-bold">₹{chit.monthlyAmount}</div>
+                                                                <div className="d-flex justify-content-between align-items-center border-top pt-2 mt-auto">
+                                                                    <div>
+                                                                        <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Monthly</small>
+                                                                        <span className="fw-bold" style={{ color: '#915200' }}>₹{chit.monthlyAmount}</span>
+                                                                    </div>
+                                                                    <div className="text-end">
+                                                                        <small className="text-muted d-block" style={{ fontSize: '0.7rem' }}>Subscribers</small>
+                                                                        <span className="fw-bold text-dark">{chit.subscribers ? chit.subscribers.length : 0}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                        <div className="col-6">
-                                                            <div className="text-muted">Duration</div>
-                                                            <div className="fw-bold">{chit.durationMonths} Months</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                    </Col>
+                                                ))}
+                                            </Row>
                                         </div>
                                     ) : (
-                                        <div className="text-center py-5">
-                                            <i className="fas fa-folder-open fa-2x text-muted mb-2"></i>
-                                            <p className="text-muted small">No active chit plans found.</p>
+                                        <div className="text-center py-5 d-flex flex-column align-items-center justify-content-center h-100">
+                                            <div className="bg-white p-4 rounded-circle shadow-sm mb-3">
+                                                <i className="fas fa-folder-open fa-3x text-muted"></i>
+                                            </div>
+                                            <h6 className="text-secondary fw-bold">No Active Plans</h6>
+                                            <p className="text-muted small">This merchant hasn't created any chit plans yet.</p>
                                         </div>
                                     )}
                                 </div>
@@ -418,22 +488,28 @@ const MerchantList = ({ mode = 'admin' }) => {
                         </Row>
                     )}
                 </Modal.Body>
-                <Modal.Footer className="bg-white">
-                    {mode !== 'public' && selectedMerchant && (
-                        <>
+                {mode !== 'public' && selectedMerchant && (
+                    <Modal.Footer className="bg-white border-top">
+                        <div className="d-flex gap-2 w-100 justify-content-end">
+                            <Button variant="light" onClick={handleClose} className="rounded-pill px-4 fw-medium border">Close</Button>
                             {selectedMerchant.status === 'Pending' && (
                                 <>
-                                    <Button style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => { handleClose(); triggerAction(selectedMerchant, 'Approve'); }}>Approve</Button>
-                                    <Button style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => { handleClose(); triggerAction(selectedMerchant, 'Reject'); }}>Reject</Button>
+                                    <Button className="rounded-pill px-4 text-white border-0" style={{ background: 'linear-gradient(to right, #48bb78, #38a169)' }} onClick={() => { handleClose(); triggerAction(selectedMerchant, 'Approve'); }}>
+                                        <i className="fas fa-check me-2"></i>Approve Merchant
+                                    </Button>
+                                    <Button className="rounded-pill px-4 text-white border-0" style={{ background: 'linear-gradient(to right, #f56565, #e53e3e)' }} onClick={() => { handleClose(); triggerAction(selectedMerchant, 'Reject'); }}>
+                                        <i className="fas fa-times me-2"></i>Reject Merchant
+                                    </Button>
                                 </>
                             )}
                             {selectedMerchant.status === 'Approved' && (
-                                <Button style={{ backgroundColor: '#915200', borderColor: '#915200', color: 'white' }} onClick={() => { handleClose(); triggerAction(selectedMerchant, 'Reject'); }}>Reject</Button>
+                                <Button className="rounded-pill px-4 text-white border-0" style={{ background: 'linear-gradient(to right, #f56565, #e53e3e)' }} onClick={() => { handleClose(); triggerAction(selectedMerchant, 'Reject'); }}>
+                                    <i className="fas fa-ban me-2"></i>Reject Access
+                                </Button>
                             )}
-                        </>
-                    )}
-                    <Button variant="secondary" onClick={handleClose}>Close</Button>
-                </Modal.Footer>
+                        </div>
+                    </Modal.Footer>
+                )}
             </Modal>
 
             {/* Confirmation Modal */}

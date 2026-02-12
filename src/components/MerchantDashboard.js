@@ -45,8 +45,35 @@ ChartJS.register(
     RadialLinearScale
 );
 
+const PRICING = {
+    Standard: {
+        monthly: 2360,
+        yearly: 23600,
+        limit: 6,
+        benefits: [
+            "Create up to 6 Chit Plans",
+            "Basic Analytics",
+            "Email Support",
+            "Standard Dashboard"
+        ]
+    },
+    Premium: {
+        monthly: 4130,
+        yearly: 41300,
+        limit: 9,
+        benefits: [
+            "Create up to 9 Chit Plans",
+            "Advanced Analytics & Trends",
+            "Priority 24/7 Support",
+            "Custom Ads Manager",
+            "iOS App Access"
+        ]
+    }
+};
+
 const MerchantDashboard = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('overview');
+    const [upgradeCycle, setUpgradeCycle] = useState('yearly');
     const [goldRates, setGoldRates] = useState({
         buy24: 0, sell24: 0,
         buy22: 0, sell22: 0,
@@ -1201,47 +1228,81 @@ const MerchantDashboard = ({ user, onLogout }) => {
 
             {/* Feature Upgrade Modal */}
             <Modal show={showFeatureModal} onHide={() => setShowFeatureModal(false)} centered size="lg">
-                <Modal.Header closeButton className="border-0 bg-gradient-primary text-white" style={{ background: 'linear-gradient(135deg, #1e1e1e 0%, #3a3a3a 100%)' }}>
-                    <Modal.Title className="fw-bold"><i className="fas fa-crown text-warning me-2"></i>Upgrade to Premium</Modal.Title>
+                <Modal.Header closeButton className="border-0 bg-white">
+                    <Modal.Title className="fw-bold ms-2"><i className="fas fa-crown text-warning me-2"></i>Choose Your Plan</Modal.Title>
                 </Modal.Header>
-                <Modal.Body className="p-0">
-                    <div className="row g-0">
-                        <div className="col-md-5 bg-light d-flex align-items-center justify-content-center p-4">
-                            <div className="text-center">
-                                <div className="d-inline-flex align-items-center justify-content-center bg-white rounded-circle shadow-sm mb-3" style={{ width: '100px', height: '100px' }}>
-                                    <i className="fas fa-chart-line fa-3x" style={{ color: '#915200' }}></i>
-                                </div>
-                                <h5 className="fw-bold mb-2">Detailed Analytics</h5>
-                                <p className="text-muted small">Unlock powerful insights to grow your subscribers and revenue.</p>
-                            </div>
-                        </div>
-                        <div className="col-md-7 p-4">
-                            <h5 className="fw-bold mb-3" style={{ color: '#915200' }}>Why Upgrade?</h5>
-                            <ul className="list-unstyled d-grid gap-2 mb-4">
-                                <li className="d-flex align-items-center"><i className="fas fa-check-circle text-success me-2"></i> View Monthly Collections & Forecasts</li>
-                                <li className="d-flex align-items-center"><i className="fas fa-check-circle text-success me-2"></i> Access Total Asset Value (AUM) Data</li>
-                                <li className="d-flex align-items-center"><i className="fas fa-check-circle text-success me-2"></i> Visual Subscriber Growth Charts</li>
-                                <li className="d-flex align-items-center"><i className="fas fa-check-circle text-success me-2"></i> Create <strong className='mx-1'>upto 6</strong> Chit Plans</li>
-                                <li className="d-flex align-items-center"><i className="fas fa-check-circle text-success me-2"></i> Priority Support</li>
-                            </ul>
-                            <div className="d-grid gap-2">
-                                <Button
-                                    className="fw-bold text-white py-2"
-                                    style={{ background: 'linear-gradient(90deg, #915200 0%, #d4af37 100%)', border: 'none' }}
-                                    onClick={() => {
-                                        setShowFeatureModal(false);
-                                        setActiveTab('profile'); // Send to profile to pay
-                                    }}
-                                >
-                                    Go to Payment
-                                </Button>
-                                <Button variant="outline-secondary" onClick={() => setShowFeatureModal(false)}>
-                                    Maybe Later
-                                </Button>
-                            </div>
+                <Modal.Body className="p-4 pt-0">
+                    <div className="texy-center mb-4">
+                        <p className="text-muted text-center">Unlock powerful features to grow your business.</p>
+                        <div className="d-flex justify-content-center gap-2">
+                            <Button
+                                variant={upgradeCycle === 'monthly' ? 'dark' : 'outline-dark'}
+                                size="sm"
+                                className="rounded-pill px-4 fw-bold"
+                                onClick={() => setUpgradeCycle('monthly')}
+                            >
+                                Monthly
+                            </Button>
+                            <Button
+                                variant={upgradeCycle === 'yearly' ? 'dark' : 'outline-dark'}
+                                size="sm"
+                                className="rounded-pill px-4 fw-bold"
+                                onClick={() => setUpgradeCycle('yearly')}
+                            >
+                                Yearly <Badge bg="success" className="ms-1">-17%</Badge>
+                            </Button>
                         </div>
                     </div>
+
+                    <div className="row g-4 justify-content-center">
+                        {['Standard', 'Premium'].map((planKey) => {
+                            const details = PRICING[planKey];
+                            const price = upgradeCycle === 'yearly' ? details.yearly : details.monthly;
+                            const isPremium = planKey === 'Premium';
+
+                            return (
+                                <div className="col-md-6" key={planKey}>
+                                    <div className={`card h-100 border-${isPremium ? 'warning' : 'light'} shadow-sm overflow-hidden`} style={{ borderRadius: '16px', borderWidth: isPremium ? '2px' : '1px' }}>
+                                        {isPremium && <div className="bg-warning text-dark text-center fw-bold small py-1">MOST POPULAR</div>}
+                                        <div className="card-body p-4 text-center d-flex flex-column">
+                                            <h4 className="fw-bold mb-2" style={{ color: isPremium ? '#d4af37' : '#212529' }}>{planKey}</h4>
+                                            <div className="mb-3">
+                                                <span className="display-6 fw-bold text-dark">₹{price.toLocaleString()}</span>
+                                                <span className="text-muted fs-6">/{upgradeCycle === 'yearly' ? 'yr' : 'mo'}</span>
+                                            </div>
+
+                                            <ul className="list-unstyled text-start mb-4 flex-grow-1 small mx-auto" style={{ maxWidth: '260px' }}>
+                                                {details.benefits.map((benefit, i) => (
+                                                    <li key={i} className="mb-2 text-muted d-flex align-items-start">
+                                                        <i className={`fas fa-check-circle mt-1 me-2 ${isPremium ? 'text-success' : 'text-primary'}`}></i>
+                                                        <span style={{ lineHeight: '1.4' }}>{benefit}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+
+                                            <div className="mt-auto">
+                                                <Button
+                                                    variant={isPremium ? 'dark' : 'outline-dark'}
+                                                    className="w-100 py-2 rounded-pill fw-bold"
+                                                    style={isPremium ? { background: 'linear-gradient(90deg, #915200 0%, #d4af37 100%)', border: 'none' } : {}}
+                                                    onClick={() => {
+                                                        setShowFeatureModal(false);
+                                                        setActiveTab('profile');
+                                                    }}
+                                                >
+                                                    Select {planKey}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
                 </Modal.Body>
+                <Modal.Footer className="border-0 justify-content-center pt-2 pb-4">
+                    <Button variant="link" className="text-muted text-decoration-none small" onClick={() => setShowFeatureModal(false)}>Maybe Later</Button>
+                </Modal.Footer>
             </Modal>
 
             {/* Mobile ticker if needed */}
