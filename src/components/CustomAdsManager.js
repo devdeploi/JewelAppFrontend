@@ -163,6 +163,13 @@ const CustomAdsManager = ({ user }) => {
         setExistingImages(updated);
     };
 
+    const handleRemoveNewImage = (index) => {
+        const updatedFiles = imageFiles.filter((_, i) => i !== index);
+        const updatedUrls = previewUrls.filter((_, i) => i !== index);
+        setImageFiles(updatedFiles);
+        setPreviewUrls(updatedUrls);
+    };
+
     const handleToggleStatus = async (ad) => {
         try {
             const config = { headers: { Authorization: `Bearer ${user.token}` } };
@@ -358,15 +365,15 @@ const CustomAdsManager = ({ user }) => {
 
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <div className="d-flex align-items-center">
-                        <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                            style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #f3e9bd 0%, #ebdc87 100%)', color: '#915200' }}>
-                            <i className="fas fa-ad fa-lg"></i>
-                        </div>
-                        <div>
-                            <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>My Campaigns</h5>
-                            <small className="text-muted">Manage your exclusive brand promotions.</small>
-                        </div>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                        style={{ width: '50px', height: '50px', background: 'linear-gradient(135deg, #f3e9bd 0%, #ebdc87 100%)', color: '#915200' }}>
+                        <i className="fas fa-ad fa-lg"></i>
                     </div>
+                    <div>
+                        <h5 className="fw-bold mb-0" style={{ color: '#915200' }}>My Campaigns</h5>
+                        <small className="text-muted">Manage your exclusive brand promotions.</small>
+                    </div>
+                </div>
                 {!activeAd && (
                     <button
                         className="cta-button"
@@ -529,6 +536,7 @@ const CustomAdsManager = ({ user }) => {
                                     {previewUrls.map((url, i) => (
                                         <div key={`new-${i}`} className="position-relative flex-shrink-0" style={{ width: 80, height: 80 }}>
                                             <img src={url} alt="" className="rounded w-100 h-100 object-fit-cover shadow-sm" />
+                                            <button type="button" className="btn btn-danger btn-sm p-0 position-absolute top-0 end-0 rounded-circle shadow-sm" style={{ width: 20, height: 20, lineHeight: 1, transform: 'translate(40%, -40%)' }} onClick={() => handleRemoveNewImage(i)}>×</button>
                                         </div>
                                     ))}
                                     {(existingImages.length + imageFiles.length < 5) && (
